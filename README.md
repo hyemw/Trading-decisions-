@@ -1,2 +1,2 @@
-# Trading-decisions-
-A tool designed to make decisions specifically for he stock market
+“白天管不住手，收盘过山车？这是一个帮你死锁下午 2:50、用冰冷数学克制冲动交易的冷血风控 App。”
+不教他怎么暴富，只负责在两点五十用数据帮他冷静地踩刹车或踩油门。
