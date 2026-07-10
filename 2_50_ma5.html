@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2:50 尾盘量化决策沙盘</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;600;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Serif SC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #060913;
+        }
+        .motto-font {
+            font-family: 'Ma Shan Zheng', cursive, 'Noto Serif SC', serif;
+        }
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Glassmorphism effects */
+        .glass-card {
+            background: rgba(11, 16, 27, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        /* Glowing shadow effects */
+        .glow-green {
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.25);
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+        .glow-red {
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.25);
+            border-color: rgba(239, 68, 68, 0.4);
+        }
+        .glow-yellow {
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.2);
+            border-color: rgba(245, 158, 11, 0.35);
+        }
+        /* Custom scrollbar for beautiful lists */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(245, 158, 11, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(245, 158, 11, 0.5);
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col justify-between py-4 px-4 sm:px-6 relative">
+
+    <!-- 顶端悬浮 Toast 通知中心 -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 max-w-xs w-full px-4 pointer-events-none"></div>
+
+    <!-- 顶部状态栏与核心总纲 -->
+    <header class="max-w-md w-full mx-auto text-center mb-2">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/90 border border-slate-800 text-[10px] tracking-widest text-slate-400 mb-2 uppercase">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            10分制多维度冷血决策终端
+        </div>
+        
+        <!-- 交易之魂总纲 -->
+        <div class="py-2.5 px-2 border-y border-slate-900 my-1">
+            <p class="motto-font text-2xl sm:text-3xl text-amber-100 tracking-wider leading-relaxed text-center drop-shadow-lg">
+                “寄微躯于狂澜，收悬念于落日。
+            </p>
+            <p class="motto-font text-2xl sm:text-3xl text-amber-100 tracking-wider leading-relaxed text-center mt-1 drop-shadow-lg">
+                智者不赌未知之晨，唯审主力和合之暮。”
+            </p>
+        </div>
+    </header>
+
+    <!-- 顶层主工作区切换 TAB -->
+    <div class="max-w-md w-full mx-auto mb-3 grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-900">
+        <button id="tab-btn-calculator" onclick="switchTab('calculator')" class="py-2 rounded-lg text-xs font-bold transition duration-150 text-amber-400 bg-slate-900 border border-amber-500/15">
+            🧮 10分制沙盘计算器
+        </button>
+        <button id="tab-btn-scanner" onclick="switchTab('scanner')" class="py-2 rounded-lg text-xs font-bold transition duration-150 text-slate-400 hover:text-slate-200">
+            🔍 全市场智能扫描挖掘
+        </button>
+    </div>
+
+    <!-- 主控台 -->
+    <main class="max-w-md w-full mx-auto flex-1 flex flex-col justify-center gap-4">
+
+        <!-- ================= TAB 1: 沙盘计算器主面板 ================= -->
+        <div id="tab-calculator" class="flex flex-col gap-4">
+            
+            <!-- 智能代码一键抓取面板 (腾讯 JSONP 无 CORS) -->
+            <div class="glass-card rounded-2xl p-4 shadow-2xl flex flex-col gap-3 border border-amber-500/10">
+                <span class="text-[11px] font-bold tracking-wider text-amber-400/90 flex items-center gap-1.5 uppercase">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    智能一键行情抓取 (自动测算MA5/MA10/量能)
+                </span>
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <input id="input-search-code" type="text" placeholder="输入代码 (如 560780 或 159992)" 
+                            class="w-full bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-2 text-sm font-bold text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition duration-150 uppercase tracking-widest">
+                    </div>
+                    <button id="btn-fetch-stock" onclick="autoLoadStockData()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-black rounded-xl transition duration-150 flex items-center gap-1.5 shrink-0 shadow-lg shadow-amber-500/15">
+                        <span id="fetch-btn-spinner" class="hidden w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                        <span id="fetch-btn-text">抓取数据</span>
+                    </button>
+                </div>
+                <!-- 抓取成功提示栏 -->
+                <div id="fetch-result-indicator" class="hidden flex items-center justify-between text-[10px] bg-slate-950/60 border border-slate-900 px-3 py-2 rounded-xl">
+                    <span id="fetch-stock-name" class="font-bold text-amber-300"></span>
+                    <span id="fetch-stock-time" class="font-mono text-[9px] text-slate-500"></span>
+                </div>
+            </div>
+
+            <!-- 品种、风格与手动沙盘输入配置 -->
+            <div class="glass-card rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
+                
+                <!-- 品种与交易风格双轨选择 -->
+                <div class="grid grid-cols-2 gap-3 pb-3 border-b border-slate-850/60">
+                    <div>
+                        <span class="block text-[10px] font-semibold text-slate-400 mb-1.5 tracking-wider uppercase">手动沙盘品种</span>
+                        <div class="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                            <button id="btn-etf" onclick="setAssetType('ETF')" class="flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                ETF (-3%)
+                            </button>
+                            <button id="btn-stock" onclick="setAssetType('STOCK')" class="flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 text-slate-400 hover:text-slate-200">
+                                个股 (-4%)
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-semibold text-slate-400 mb-1.5 tracking-wider uppercase">我的交易风格</span>
+                        <div class="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                            <button id="btn-style-agg" onclick="setTradeStyle('AGGRESSIVE')" class="flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                🟢 激进型
+                            </button>
+                            <button id="btn-style-cons" onclick="setTradeStyle('CONSERVATIVE')" class="flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 text-slate-400 hover:text-slate-200">
+                                🔵 保守型
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 核心数据价格矩阵 -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 mb-1 tracking-wider">昨日收盘价 (P_昨收)</label>
+                        <input id="input-close" type="number" step="0.001" placeholder="昨收价" oninput="calculateDecision()"
+                            class="w-full bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-amber-500/40 transition duration-150 mono-font">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 mb-1 tracking-wider">今日盘中最低 (P_最低)</label>
+                        <input id="input-low" type="number" step="0.001" placeholder="盘中最低" oninput="calculateDecision()"
+                            class="w-full bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-amber-500/40 transition duration-150 mono-font">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 mb-1 tracking-wider">下午 2:50 当前 (P_当前)</label>
+                        <input id="input-tail" type="number" step="0.001" placeholder="当前实时价格" oninput="calculateDecision()"
+                            class="w-full bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-amber-500/40 transition duration-150 mono-font">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 mb-1 tracking-wider">5日均线价格 (MA5)</label>
+                        <input id="input-ma5" type="number" step="0.001" placeholder="5日线参考" oninput="calculateDecision()"
+                            class="w-full bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs font-bold text-amber-300 focus:outline-none focus:border-amber-500/40 transition duration-150 mono-font">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 mb-1 tracking-wider">10日均线价格 (MA10)</label>
+                        <input id="input-ma10" type="number" step="0.001" placeholder="10日线参考" oninput="calculateDecision()"
+                            class="w-full bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500/40 transition duration-150 mono-font">
+                    </div>
+                    <!-- 放量动能手动锁 -->
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 mb-1.5 tracking-wider">尾盘成交量能 (临场分)</label>
+                        <div class="flex items-center justify-between bg-slate-950 px-2.5 py-1.5 border border-slate-850 rounded-lg">
+                            <span class="text-[9px] text-slate-400 font-bold" id="volume-label-state">检测中 / 无放量</span>
+                            <label class="relative inline-flex items-center cursor-pointer scale-90">
+                                <input type="checkbox" id="force-volume-toggle" onchange="calculateDecision()" class="sr-only peer">
+                                <div class="w-7 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 物理校验警告栏 -->
+                <div id="physical-warning" class="hidden text-[10px] text-red-400 font-bold bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">
+                    ⚠️ 数据违反物理规则：最低价不得高于昨收价，且当前价格不得低于盘中最低价。
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="resetInputs()" class="py-2 bg-slate-950 hover:bg-slate-900 text-slate-500 hover:text-slate-300 border border-slate-850 rounded-xl text-xs font-semibold transition duration-150">
+                        🧹 重置沙盘数据
+                    </button>
+                    <button onclick="loadPreset('v_shape_bull')" class="py-2 bg-slate-900 hover:bg-slate-850 text-amber-400 border border-slate-800 rounded-xl text-xs font-semibold transition duration-150">
+                        🎲 快速加载演示预设
+                    </button>
+                </div>
+            </div>
+
+            <!-- 升级版自适应价格比例尺的分时微缩形态 (动态 SVG) -->
+            <div id="chart-card" class="glass-card rounded-2xl p-4 shadow-xl hidden">
+                <div class="flex justify-between items-center mb-1.5 border-b border-slate-900 pb-1.5">
+                    <span class="text-[10px] font-semibold text-slate-400 tracking-wider">微观分时量化走势仿真</span>
+                    <span id="chart-status" class="text-[9px] font-bold text-slate-400 font-mono"></span>
+                </div>
+                <div class="bg-slate-950/60 rounded-xl p-2 border border-slate-900 relative overflow-hidden h-28">
+                    <!-- SVG Canvas -->
+                    <svg class="w-full h-full" id="svg-chart" viewBox="0 0 300 100" preserveAspectRatio="none">
+                        <!-- 5日均线 (MA5 黄金线) -->
+                        <line id="svg-ma5-line" x1="0" y1="45" x2="300" y2="45" stroke="rgba(217, 119, 6, 0.45)" stroke-dasharray="4, 3" stroke-width="1.2" />
+                        <text id="svg-ma5-text" x="5" y="40" fill="rgba(217, 119, 6, 0.6)" font-size="6" font-weight="bold" font-family="JetBrains Mono">MA5</text>
+
+                        <!-- 10日均线 (MA10 橙色线) -->
+                        <line id="svg-ma10-line" x1="0" y1="65" x2="300" y2="65" stroke="rgba(245, 158, 11, 0.35)" stroke-dasharray="4, 3" stroke-width="1.2" />
+                        <text id="svg-ma10-text" x="50" y="60" fill="rgba(245, 158, 11, 0.5)" font-size="6" font-weight="bold" font-family="JetBrains Mono">MA10</text>
+
+                        <!-- 昨收参考线 (灰色基准线) -->
+                        <line id="svg-close-line" x1="0" y1="25" x2="300" y2="25" stroke="rgba(255, 255, 255, 0.12)" stroke-dasharray="3, 3" stroke-width="0.8" />
+                        <text id="svg-close-text" x="5" y="20" fill="rgba(255, 255, 255, 0.3)" font-size="6" font-weight="bold" font-family="JetBrains Mono">昨日收盘</text>
+
+                        <!-- 模拟价格走势曲线 -->
+                        <path id="svg-path" d="" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                        
+                        <!-- 锚点 -->
+                        <circle id="dot-start" cx="15" cy="25" r="3" fill="#94a3b8" />
+                        <circle id="dot-low" cx="150" cy="80" r="3" fill="#ef4444" />
+                        <circle id="dot-end" cx="285" cy="25" r="4" fill="#3b82f6" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- 10分制精密雷盘与打分解构看板 -->
+            <div id="score-card" class="glass-card rounded-2xl p-4 shadow-xl hidden flex flex-col gap-3">
+                <div class="flex items-center justify-between border-b border-slate-900 pb-2">
+                    <span class="text-xs font-bold tracking-wider text-slate-400">10分制量化打分解构</span>
+                    <div class="flex items-center gap-1">
+                        <span class="text-xs font-bold text-slate-500">当前风格:</span>
+                        <span id="score-style-badge" class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">激进型</span>
+                    </div>
+                </div>
+
+                <!-- 仪表盘分数及指标条 -->
+                <div class="flex items-center gap-5 py-1">
+                    <!-- 左侧圆形积分大表盘 -->
+                    <div class="relative w-20 h-20 shrink-0 flex items-center justify-center rounded-full border-4 border-slate-900 bg-slate-950/80">
+                        <div class="flex flex-col items-center">
+                            <span id="lbl-total-score" class="text-2xl font-black tracking-tight text-amber-400 mono-font">0.0</span>
+                            <span class="text-[8px] text-slate-500 tracking-widest uppercase">总评分</span>
+                        </div>
+                        <svg class="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 36 36">
+                            <path class="text-slate-900" stroke-width="1.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path id="svg-score-progress" class="text-amber-500 transition-all duration-300" stroke-dasharray="0, 100" stroke-width="2" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                    </div>
+
+                    <!-- 右侧打分详细条形分布 -->
+                    <div class="flex-1 flex flex-col gap-2.5 text-xs">
+                        <!-- 趋势安全度 -->
+                        <div>
+                            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                <span class="flex items-center gap-1">📊 1. 基础环境分 (看均线大趋势)</span>
+                                <span id="val-score-trend" class="text-slate-300 font-mono">0 / 3.0 分</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                <div id="bar-score-trend" class="h-full bg-blue-500 transition-all duration-300 w-0"></div>
+                            </div>
+                        </div>
+
+                        <!-- 日内自救强度 -->
+                        <div>
+                            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                <span class="flex items-center gap-1">⚡ 2. 日内形态分 (2:50 自救斜率)</span>
+                                <span id="val-score-recovery" class="text-slate-300 font-mono">0 / 5.0 分</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                <div id="bar-score-recovery" class="h-full bg-emerald-500 transition-all duration-300 w-0"></div>
+                            </div>
+                        </div>
+
+                        <!-- 量能爆发系数 -->
+                        <div>
+                            <div class="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                <span class="flex items-center gap-1">🔥 3. 临场动能辅助分 (尾盘放量系数)</span>
+                                <span id="val-score-volume" class="text-slate-300 font-mono">0 / 2.0 分</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                <div id="bar-score-volume" class="h-full bg-amber-500 transition-all duration-300 w-0"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 10分制终审决策大看板 -->
+            <div id="decision-card" class="glass-card rounded-2xl p-6 transition duration-300 flex flex-col gap-4 text-center items-center justify-center min-h-[170px]">
+                <div id="decision-status" class="text-slate-500 flex flex-col items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-700 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <p class="text-xs font-bold tracking-widest text-slate-500 mt-2">请在上方输入交易数据，系统一秒启动多维度终审</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================= TAB 2: 全市场智能扫描挖掘 ================= -->
+        <div id="tab-scanner" class="hidden flex flex-col gap-4">
+            <!-- 扫描操作卡片 -->
+            <div class="glass-card rounded-2xl p-5 shadow-2xl flex flex-col gap-4 border border-amber-500/10">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 animate-spin text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" id="spinner-icon-master">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15M20 20v-5h-.581" />
+                        </svg>
+                        全市场高弹性标的智能挖掘
+                    </span>
+                    <span class="text-[10px] text-slate-400 mt-1">系统将自动并行穿透腾讯接口，下载全市场当前交易周期最热的主流高弹性 ETF，进行10分制深度量化评分，直接找出最强主力自救盘。</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="btn-master-scan" onclick="runMarketScan()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-black rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/15">
+                        ⚡ 一键全市场穿透式扫描
+                    </button>
+                    <button onclick="setScanStyle('AGGRESSIVE')" id="btn-scan-style-agg" class="px-3 py-2.5 rounded-xl text-xs font-bold border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+                        激进偏好
+                    </button>
+                    <button onclick="setScanStyle('CONSERVATIVE')" id="btn-scan-style-cons" class="px-3 py-2.5 rounded-xl text-xs font-bold border border-slate-800 text-slate-400">
+                        保守偏好
+                    </button>
+                </div>
+
+                <!-- 进度指示条 -->
+                <div id="scan-progress-container" class="hidden flex flex-col gap-1.5">
+                    <div class="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                        <span id="scan-progress-text">正在扫描 A 股高弹性资金流...</span>
+                        <span id="scan-progress-percent" class="font-mono">0%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-slate-900">
+                        <div id="scan-progress-bar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-150 w-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 扫描结果呈现面板 -->
+            <div id="scan-results-card" class="glass-card rounded-2xl p-4 shadow-xl flex flex-col gap-3 min-h-[250px]">
+                <div class="flex items-center justify-between border-b border-slate-900 pb-2">
+                    <span class="text-xs font-bold text-slate-400 tracking-wider">挖掘结果排行榜 (按评分由高至低)</span>
+                    <span id="scan-results-count" class="text-[10px] font-bold text-slate-500">共 0 个标的</span>
+                </div>
+                
+                <!-- 列表容器 -->
+                <div id="scan-list-container" class="flex flex-col gap-2 max-h-[350px] overflow-y-auto pr-1">
+                    <div class="flex flex-col items-center justify-center py-12 text-slate-600 gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                        <span class="text-xs font-semibold tracking-wider">点击上方一键全扫描，开始主力深V和均线数据探测</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 底部安全说明 -->
+    <footer class="max-w-md w-full mx-auto mt-4 text-center text-[10px] text-slate-600 font-semibold tracking-wider flex flex-col gap-1 border-t border-slate-900 pt-3">
+        <p>10分制雷盘决策逻辑已集成 · MA5/MA10加权融合 · 多风格智能选股引擎</p>
+        <p>© 2026 尾盘量化风控决策版 3.0.0</p>
+    </footer>
+
+    <!-- JavaScript 交互与量化核心逻辑 -->
+    <script>
+        // 全局状态管理
+        let assetType = 'ETF'; // 'ETF' | 'STOCK'
+        let tradeStyle = 'AGGRESSIVE'; // 'AGGRESSIVE' | 'CONSERVATIVE'
+        let activeTab = 'calculator'; // 'calculator' | 'scanner'
+        let scanStyle = 'AGGRESSIVE'; // 'AGGRESSIVE' | 'CONSERVATIVE'
+
+        // 扫描标的池(A股和港股主要行业高弹性标的)
+        const SCAN_POOL = [
+            { code: '560780', name: '半导体设备 ETF', type: 'ETF' },
+            { code: '159992', name: '创新药 ETF', type: 'ETF' },
+            { code: '513180', name: '恒生科技 ETF', type: 'ETF' },
+            { code: '588000', name: '科创50 ETF', type: 'ETF' },
+            { code: '159915', name: '创业板 ETF', type: 'ETF' },
+            { code: '512660', name: '军工 ETF', type: 'ETF' },
+            { code: '159869', name: '游戏 ETF', type: 'ETF' },
+            { code: '512480', name: '半导体 ETF', type: 'ETF' },
+            { code: '159995', name: '芯片 ETF', type: 'ETF' },
+            { code: '510300', name: '沪深300 ETF', type: 'ETF' },
+            { code: '512010', name: '医药 ETF', type: 'ETF' },
+            { code: '159939', name: '信息技术 ETF', type: 'ETF' }
+        ];
+
+        // 切换TAB页
+        function switchTab(tab) {
+            activeTab = tab;
+            const btnCalc = document.getElementById('tab-btn-calculator');
+            const btnScan = document.getElementById('tab-btn-scanner');
+            const panelCalc = document.getElementById('tab-calculator');
+            const panelScan = document.getElementById('tab-scanner');
+
+            if (tab === 'calculator') {
+                btnCalc.className = "py-2 rounded-lg text-xs font-bold transition duration-150 text-amber-400 bg-slate-900 border border-amber-500/15";
+                btnScan.className = "py-2 rounded-lg text-xs font-bold transition duration-150 text-slate-400 hover:text-slate-200";
+                panelCalc.classList.remove('hidden');
+                panelScan.classList.add('hidden');
+            } else {
+                btnScan.className = "py-2 rounded-lg text-xs font-bold transition duration-150 text-amber-400 bg-slate-900 border border-amber-500/15";
+                btnCalc.className = "py-2 rounded-lg text-xs font-bold transition duration-150 text-slate-400 hover:text-slate-200";
+                panelScan.classList.remove('hidden');
+                panelCalc.classList.add('hidden');
+            }
+        }
+
+        // 切换品种
+        function setAssetType(type) {
+            assetType = type;
+            const btnEtf = document.getElementById('btn-etf');
+            const btnStock = document.getElementById('btn-stock');
+            
+            if (type === 'ETF') {
+                btnEtf.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                btnStock.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 text-slate-400 hover:text-slate-200";
+            } else {
+                btnStock.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                btnEtf.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 text-slate-400 hover:text-slate-200";
+            }
+            calculateDecision();
+        }
+
+        // 切换交易风格
+        function setTradeStyle(style) {
+            tradeStyle = style;
+            const btnAgg = document.getElementById('btn-style-agg');
+            const btnCons = document.getElementById('btn-style-cons');
+            const scoreBadge = document.getElementById('score-style-badge');
+            
+            if (style === 'AGGRESSIVE') {
+                btnAgg.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                btnCons.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 text-slate-400 hover:text-slate-200";
+                scoreBadge.className = "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                scoreBadge.innerText = "激进型";
+            } else {
+                btnCons.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 bg-blue-500/10 text-blue-400 border border-blue-500/20";
+                btnAgg.className = "flex-1 py-1 rounded-md text-[10px] font-bold transition duration-150 text-slate-400 hover:text-slate-200";
+                scoreBadge.className = "px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20";
+                scoreBadge.innerText = "保守型";
+            }
+            calculateDecision();
+        }
+
+        // 切换扫描器交易风格偏好
+        function setScanStyle(style) {
+            scanStyle = style;
+            const btnAgg = document.getElementById('btn-scan-style-agg');
+            const btnCons = document.getElementById('btn-scan-style-cons');
+
+            if (style === 'AGGRESSIVE') {
+                btnAgg.className = "px-3 py-2.5 rounded-xl text-xs font-bold border border-emerald-500/20 bg-emerald-500/10 text-emerald-400";
+                btnCons.className = "px-3 py-2.5 rounded-xl text-xs font-bold border border-slate-800 text-slate-400";
+            } else {
+                btnCons.className = "px-3 py-2.5 rounded-xl text-xs font-bold border border-blue-500/20 bg-blue-500/10 text-blue-400";
+                btnAgg.className = "px-3 py-2.5 rounded-xl text-xs font-bold border border-slate-800 text-slate-400";
+            }
+            // 重新刷新已有的扫描结果渲染（如有）
+            if (lastScanResults) {
+                renderScanResults(lastScanResults);
+            }
+        }
+
+        // 加载预设场景
+        function loadPreset(presetName) {
+            const presets = {
+                v_shape_bull: { close: 10.00, low: 9.30, tail: 9.80, ma5: 9.50, ma10: 9.30, forceVolume: true, asset: 'ETF' }
+            };
+
+            const data = presets[presetName];
+            if (data) {
+                document.getElementById('input-close').value = data.close;
+                document.getElementById('input-low').value = data.low;
+                document.getElementById('input-tail').value = data.tail;
+                document.getElementById('input-ma5').value = data.ma5;
+                document.getElementById('input-ma10').value = data.ma10;
+                document.getElementById('force-volume-toggle').checked = data.forceVolume;
+                setAssetType(data.asset);
+            }
+        }
+
+        // 核心量化打分和决策引擎
+        function calculateDecision() {
+            const pClose = parseFloat(document.getElementById('input-close').value);
+            const pLow = parseFloat(document.getElementById('input-low').value);
+            const pTail = parseFloat(document.getElementById('input-tail').value);
+            const pMA5 = parseFloat(document.getElementById('input-ma5').value);
+            const pMA10 = parseFloat(document.getElementById('input-ma10').value);
+            const forceVolume = document.getElementById('force-volume-toggle').checked;
+
+            const warningBlock = document.getElementById('physical-warning');
+            const decCard = document.getElementById('decision-card');
+            const trendBanner = document.getElementById('trend-banner');
+            const chartCard = document.getElementById('chart-card');
+            const scoreCard = document.getElementById('score-card');
+
+            // 1. 基础数据不全则不执行计算
+            if (isNaN(pClose) || pClose <= 0 || isNaN(pLow) || pLow <= 0 || isNaN(pTail) || pTail <= 0) {
+                chartCard.classList.add('hidden');
+                scoreCard.classList.add('hidden');
+                return;
+            }
+
+            // A股物理逻辑校验
+            let isPhysicalError = false;
+            if (pLow > pClose || pTail < pLow) {
+                isPhysicalError = true;
+            }
+
+            if (isPhysicalError) {
+                warningBlock.classList.remove('hidden');
+                decCard.className = "glass-card rounded-2xl p-6 border-red-500/30 flex flex-col gap-4 text-center items-center justify-center min-h-[170px]";
+                decCard.innerHTML = `
+                    <div class="text-red-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p class="text-xs font-bold tracking-wider">数据不符合交易逻辑，请修正您的输入</p>
+                    </div>
+                `;
+                chartCard.classList.add('hidden');
+                scoreCard.classList.add('hidden');
+                return;
+            } else {
+                warningBlock.classList.add('hidden');
+            }
+
+            chartCard.classList.remove('hidden');
+            scoreCard.classList.remove('hidden');
+
+            // 2. 计算量化基础因子
+            const maxDrop = ((pLow - pClose) / pClose) * 100;
+
+            let recoveryRate = 0;
+            if (pClose !== pLow) {
+                recoveryRate = ((pTail - pLow) / (pClose - pLow)) * 100;
+            } else {
+                recoveryRate = 100;
+            }
+            if (recoveryRate < 0) recoveryRate = 0;
+            if (recoveryRate > 100) recoveryRate = 100;
+
+            // 3. 动态绘制 K 线
+            drawSlickChart(pClose, pLow, pTail, pMA5, pMA10, maxDrop, recoveryRate);
+
+            // 4. 【10分制核心打分量化系统】
+            
+            // 4.1 基础环境分 (看大趋势，满分 3 分)
+            let scoreTrend = 0;
+            if (!isNaN(pMA5) && !isNaN(pMA10)) {
+                if (pTail > pMA5 && pTail > pMA10) {
+                    scoreTrend = 3.0;
+                } else if ((pTail >= pMA5 && pTail <= pMA10) || (pTail >= pMA10 && pTail <= pMA5)) {
+                    scoreTrend = 1.5;
+                } else {
+                    scoreTrend = 0.0;
+                }
+            } else {
+                // 如果没有提供 MA 数据，默认给中性分 1.5
+                scoreTrend = 1.5;
+            }
+
+            // 4.2 日内形态分 (2:50 自救斜率，满分 5 分)
+            let scoreRecovery = 0;
+            if (recoveryRate >= 40.0) {
+                scoreRecovery = 5.0;
+            } else if (recoveryRate >= 15.0 && recoveryRate < 40.0) {
+                scoreRecovery = 2.5;
+            } else {
+                scoreRecovery = 0.0;
+            }
+
+            // 4.3 临场动能辅助分 (尾盘放量系数，满分 2 分)
+            const scoreVolume = forceVolume ? 2.0 : 0.0;
+            
+            const totalScore = scoreTrend + scoreRecovery + scoreVolume;
+
+            // 5. 更新仪表盘 UI
+            updateScoreboardUI(scoreTrend, scoreRecovery, scoreVolume, totalScore);
+
+            // 6. 10分制精密策略执行决策状态机
+            executeTenPointDecisionMatrix(totalScore, scoreRecovery, maxDrop, recoveryRate);
+        }
+
+        // 10分制精密策略执行决策状态机
+        function executeTenPointDecisionMatrix(totalScore, scoreRecovery, maxDrop, recoveryRate) {
+            const decCard = document.getElementById('decision-card');
+            const threshold = (assetType === 'ETF') ? -3.0 : -4.0;
+            const thresholdText = (assetType === 'ETF') ? "-3% (ETF)" : "-4% (个股)";
+
+            // 临场拦截：先判断是不是完全没有发生跌幅恐慌
+            if (maxDrop > threshold && totalScore >= 5.0) {
+                // 虽然环境好拉高，但盘中没有砸出黄金大恐慌
+                decCard.className = "glass-card rounded-2xl p-5 glow-yellow border-amber-500 bg-amber-950/15 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                decCard.innerHTML = `
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-500 text-slate-950 text-2xl font-bold">🟡</span>
+                        <div class="text-[10px] tracking-widest text-amber-400 font-bold bg-amber-500/10 px-3 py-0.5 rounded-full border border-amber-500/20 uppercase">
+                            无恐慌盘 · 锁仓观察
+                        </div>
+                        <h2 class="text-lg font-black text-amber-500">
+                            趋势完好，雷打不动！
+                        </h2>
+                        <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                            量化打分为 ${totalScore.toFixed(1)} 分，趋势支撑强。但今日最大跌幅仅有 ${maxDrop.toFixed(2)}%，未触达 ${thresholdText} 级别的极端大恐慌自救深度，此时不宜追高加仓。锁仓拿死！
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            // A. 【8 - 10 分】：绝对的多头趋势 + 狂暴深 V
+            if (totalScore >= 8.0) {
+                if (tradeStyle === 'AGGRESSIVE') {
+                    decCard.className = "glass-card rounded-2xl p-5 glow-green border-emerald-500 bg-emerald-950/20 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                    decCard.innerHTML = `
+                        <div class="flex flex-col items-center gap-2 animate-[pulse_3s_infinite]">
+                            <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500 text-slate-950 text-2xl font-bold">🟢</span>
+                            <div class="text-[10px] tracking-widest text-emerald-400 font-bold bg-emerald-500/10 px-3 py-0.5 rounded-full border border-emerald-500/20 uppercase">
+                                评分: ${totalScore.toFixed(1)}分 · 激进决策
+                            </div>
+                            <h2 class="text-lg font-black text-emerald-400">
+                                天时地利人和，果断满仓加！
+                            </h2>
+                            <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                                【多头进攻】宏观大趋势与日内狂暴深 V (${recoveryRate.toFixed(1)}%) 完美共振。主力真金白银在午后大举护盘并突破短周期成本，此时胜率极大，顺应趋势重拳出击！
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    decCard.className = "glass-card rounded-2xl p-5 glow-green border-emerald-500 bg-emerald-950/20 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                    decCard.innerHTML = `
+                        <div class="flex flex-col items-center gap-2">
+                            <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-500 text-slate-950 text-2xl font-bold">🔵</span>
+                            <div class="text-[10px] tracking-widest text-blue-400 font-bold bg-blue-500/10 px-3 py-0.5 rounded-full border border-blue-500/20 uppercase">
+                                评分: ${totalScore.toFixed(1)}分 · 保守决策
+                            </div>
+                            <h2 class="text-lg font-black text-blue-400">
+                                安全边际充沛，果断买入加仓
+                            </h2>
+                            <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                                均线环境呈现安全多头态势，且深 V 回升过半。保守风格确认无趋势杀跌风险，属于极高确定性的右侧狙击点，执行冷血决策买入！
+                            </p>
+                        </div>
+                    `;
+                }
+            }
+            // B. 【5 - 7.5 分】：大趋势欠佳但当天出现极为狂暴的强力深V，或者大趋势完美但仅仅轻微抵抗
+            else if (totalScore >= 5.0 && totalScore <= 7.5) {
+                if (tradeStyle === 'AGGRESSIVE') {
+                    decCard.className = "glass-card rounded-2xl p-5 glow-green border-emerald-500 bg-emerald-950/15 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                    decCard.innerHTML = `
+                        <div class="flex flex-col items-center gap-2">
+                            <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500 text-slate-950 text-2xl font-bold">🟢</span>
+                            <div class="text-[10px] tracking-widest text-emerald-400 font-bold bg-emerald-500/10 px-3 py-0.5 rounded-full border border-emerald-500/20 uppercase">
+                                评分: ${totalScore.toFixed(1)}分 · 激进决策
+                            </div>
+                            <h2 class="text-lg font-black text-emerald-400">
+                                触发【激进型买入加仓】！
+                            </h2>
+                            <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                                趋势环境虽有瑕疵（均线受压），但今天主力在尾盘砸出狂暴深 V (${recoveryRate.toFixed(1)}%) 实现自救。激进型风格无条件信任今天主力自救的坚强决心，愿意承受部分浮动风险跟庄博弈！
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    decCard.className = "glass-card rounded-2xl p-5 glow-yellow border-amber-500 bg-amber-950/15 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                    decCard.innerHTML = `
+                        <div class="flex flex-col items-center gap-2">
+                            <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-500 text-slate-950 text-2xl font-bold">🟡</span>
+                            <div class="text-[10px] tracking-widest text-amber-400 font-bold bg-amber-500/10 px-3 py-0.5 rounded-full border border-amber-500/20 uppercase">
+                                评分: ${totalScore.toFixed(1)}分 · 保守决策
+                            </div>
+                            <h2 class="text-lg font-black text-amber-500">
+                                趋势存疑，雷打不动，锁仓观察！
+                            </h2>
+                            <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                                虽然日内形态有主力疯狂自救，但宏观环境（5日、10日线）扣分过多。保守型拒绝在均线死叉、短期阴跌的逆势大通道里补充弹药。老仓锁仓，绝对不送子弹！
+                            </p>
+                        </div>
+                    `;
+                }
+            }
+            // C. 【3 - 4.5 分】：微弱抵抗，自救不成功
+            else if (totalScore >= 3.0 && totalScore <= 4.5) {
+                decCard.className = "glass-card rounded-2xl p-5 glow-yellow border-amber-500 bg-amber-950/15 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                decCard.innerHTML = `
+                    <div class="flex flex-col items-center gap-2">
+                        <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-500 text-slate-950 text-2xl font-bold">🟡</span>
+                        <div class="text-[10px] tracking-widest text-yellow-400 font-bold bg-yellow-500/10 px-3 py-0.5 rounded-full border border-yellow-500/20 uppercase">
+                            评分: ${totalScore.toFixed(1)}分 · 锁仓静守
+                        </div>
+                        <h2 class="text-lg font-black text-yellow-500">
+                            雷打不动，锁仓静守，拒绝多动！
+                        </h2>
+                        <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                            尾盘反弹极其微弱，没有爆发出决胜性大资金介入信号。此时既无斩仓出逃的绝境，也绝不具备加仓子弹的可能。关闭看盘，安心跨周期！
+                        </p>
+                    </div>
+                `;
+            }
+            // D. 【0 - 2.5 分】：真崩盘无反弹，死瘫在最深深渊
+            else {
+                decCard.className = "glass-card rounded-2xl p-5 glow-red border-red-500 bg-red-950/20 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
+                decCard.innerHTML = `
+                    <div class="flex flex-col items-center gap-2 animate-pulse">
+                        <span class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-500 text-slate-950 text-2xl font-bold">🔴</span>
+                        <div class="text-[10px] tracking-widest text-red-400 font-bold bg-red-500/10 px-3 py-0.5 rounded-full border border-red-500/20 uppercase">
+                            评分: ${totalScore.toFixed(1)}分 · 终审割肉
+                        </div>
+                        <h2 class="text-lg font-black text-red-400">
+                            一剪子剪断！果断清仓离场
+                        </h2>
+                        <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
+                            无论是谁，天王老子来了今天也必须斩仓认输！尾盘死瘫在全天最低价，收复率 (${recoveryRate.toFixed(1)}% < 15%)。这绝对不是洗盘，是主力资金慌不择路在割肉逃命，果断走人保护大部队本金！
+                        </p>
+                    </div>
+                `;
+            }
+        }
+
+        // 升级版自适应价格比例尺的分时微缩形态绘制
+        function drawSlickChart(pClose, pLow, pTail, pMA5, pMA10, maxDrop, recoveryRate) {
+            const path = document.getElementById('svg-path');
+            const dotLow = document.getElementById('dot-low');
+            const dotEnd = document.getElementById('dot-end');
+            const ma5Line = document.getElementById('svg-ma5-line');
+            const ma5Text = document.getElementById('svg-ma5-text');
+            const ma10Line = document.getElementById('svg-ma10-line');
+            const ma10Text = document.getElementById('svg-ma10-text');
+            const closeLine = document.getElementById('svg-close-line');
+            const closeText = document.getElementById('svg-close-text');
+            const statusLabel = document.getElementById('chart-status');
+
+            // 自适应映射
+            const prices = [pClose, pLow, pTail];
+            if (!isNaN(pMA5) && pMA5 > 0) prices.push(pMA5);
+            if (!isNaN(pMA10) && pMA10 > 0) prices.push(pMA10);
+
+            const maxPrice = Math.max(...prices) * 1.005;
+            const minPrice = Math.min(...prices) * 0.995;
+            const range = maxPrice - minPrice;
+
+            const mapY = (price) => {
+                if (range === 0) return 50;
+                return 85 - ((price - minPrice) / range) * 70;
+            };
+
+            const closeY = mapY(pClose);
+            const lowY = mapY(pLow);
+            const tailY = mapY(pTail);
+
+            closeLine.setAttribute('y1', closeY);
+            closeLine.setAttribute('y2', closeY);
+            closeText.setAttribute('y', closeY - 4);
+
+            if (!isNaN(pMA5) && pMA5 > 0) {
+                const ma5Y = mapY(pMA5);
+                ma5Line.setAttribute('y1', ma5Y);
+                ma5Line.setAttribute('y2', ma5Y);
+                ma5Line.setAttribute('class', 'block');
+                ma5Text.setAttribute('y', ma5Y - 4);
+                ma5Text.setAttribute('class', 'block');
+            } else {
+                ma5Line.setAttribute('class', 'hidden');
+                ma5Text.setAttribute('class', 'hidden');
+            }
+
+            if (!isNaN(pMA10) && pMA10 > 0) {
+                const ma10Y = mapY(pMA10);
+                ma10Line.setAttribute('y1', ma10Y);
+                ma10Line.setAttribute('y2', ma10Y);
+                ma10Line.setAttribute('class', 'block');
+                ma10Text.setAttribute('y', ma10Y - 4);
+                ma10Text.setAttribute('class', 'block');
+            } else {
+                ma10Line.setAttribute('class', 'hidden');
+                ma10Text.setAttribute('class', 'hidden');
+            }
+
+            const curveD = `M 15 ${closeY} Q 80 ${(closeY + lowY)/2} 150 ${lowY} T 285 ${tailY}`;
+            path.setAttribute('d', curveD);
+            path.setAttribute('stroke', (pTail >= pMA5) ? '#10b981' : '#eab308');
+
+            dotLow.setAttribute('cy', lowY);
+            dotEnd.setAttribute('cy', tailY);
+
+            statusLabel.innerHTML = `最大回撤: ${maxDrop.toFixed(2)}% | 尾盘收复率: ${recoveryRate.toFixed(1)}%`;
+        }
+
+        // 动态仪表盘打分 UI 更新
+        function updateScoreboardUI(scoreTrend, scoreRecovery, scoreVolume, totalScore) {
+            document.getElementById('lbl-total-score').innerText = totalScore.toFixed(1);
+
+            // 更新圆形 SVG Progress Bar
+            const circlePath = document.getElementById('svg-score-progress');
+            const percent = (totalScore / 10.0) * 100;
+            circlePath.setAttribute('stroke-dasharray', `${percent}, 100`);
+
+            // 动态更换仪表盘及圆环的颜色级别
+            if (totalScore >= 8.0) {
+                circlePath.setAttribute('class', 'text-emerald-500 transition-all duration-300');
+                document.getElementById('lbl-total-score').className = "text-2xl font-black tracking-tight text-emerald-400 mono-font";
+            } else if (totalScore >= 5.0) {
+                circlePath.setAttribute('class', 'text-amber-500 transition-all duration-300');
+                document.getElementById('lbl-total-score').className = "text-2xl font-black tracking-tight text-amber-400 mono-font";
+            } else {
+                circlePath.setAttribute('class', 'text-red-500 transition-all duration-300');
+                document.getElementById('lbl-total-score').className = "text-2xl font-black tracking-tight text-red-400 mono-font";
+            }
+
+            // 更新条形进度图与数值
+            document.getElementById('val-score-trend').innerText = `${scoreTrend.toFixed(1)} / 3.0 分`;
+            document.getElementById('bar-score-trend').style.width = `${(scoreTrend / 3.0) * 100}%`;
+
+            document.getElementById('val-score-recovery').innerText = `${scoreRecovery.toFixed(1)} / 5.0 分`;
+            document.getElementById('bar-score-recovery').style.width = `${(scoreRecovery / 5.0) * 100}%`;
+
+            document.getElementById('val-score-volume').innerText = `${scoreVolume.toFixed(1)} / 2.0 分`;
+            document.getElementById('bar-score-volume').style.width = `${(scoreVolume / 2.0) * 100}%`;
+        }
+
+        // 恢复初始
+        function resetInputs() {
+            document.getElementById('input-close').value = '';
+            document.getElementById('input-ma5').value = '';
+            document.getElementById('input-ma10').value = '';
+            document.getElementById('input-low').value = '';
+            document.getElementById('input-tail').value = '';
+            document.getElementById('input-search-code').value = '';
+            document.getElementById('force-volume-toggle').checked = false;
+            document.getElementById('volume-label-state').innerText = "检测中 / 无放量";
+            
+            // 隐藏及重置
+            document.getElementById('chart-card').classList.add('hidden');
+            document.getElementById('physical-warning').classList.add('hidden');
+            document.getElementById('fetch-result-indicator').classList.add('hidden');
+            document.getElementById('score-card').classList.add('hidden');
+
+            const decCard = document.getElementById('decision-card');
+            decCard.className = "glass-card rounded-2xl p-6 transition duration-300 flex flex-col gap-4 text-center items-center justify-center min-h-[170px]";
+            decCard.innerHTML = `
+                <div id="decision-status" class="text-slate-500 flex flex-col items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-700 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <p class="text-xs font-bold tracking-widest text-slate-500 mt-2">请在上方输入交易数据，系统一秒启动多维度终审</p>
+                </div>
+            `;
+        }
+
+        // ==================== 🚀 智能 JSONP 数据拉取模块 ====================
+
+        // 解析股票代码前缀
+        function resolveMarketCode(code) {
+            code = code.trim().toLowerCase();
+            if (/^(sh|sz|hk|bj)/.test(code)) {
+                return code;
+            }
+            if (/^\d{6}$/.test(code)) {
+                if (/^(50|51|52|56|58|60|68|90)/.test(code)) {
+                    return 'sh' + code;
+                } else {
+                    return 'sz' + code;
+                }
+            }
+            if (/^\d{5}$/.test(code)) {
+                return 'hk' + code;
+            }
+            if (/^\d{4}$/.test(code)) {
+                return 'hk0' + code;
+            }
+            return null;
+        }
+
+        // 行情数据源 1：拉取 K线数据 (计算MA5/MA10和成交量均值)
+        function fetchStockData(marketCode) {
+            return new Promise((resolve, reject) => {
+                const callbackVarName = 'kline_' + marketCode + '_' + Date.now();
+                const script = document.createElement('script');
+                script.src = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=${callbackVarName}&param=${marketCode},day,,,10,qfq`;
+                
+                script.onload = () => {
+                    const result = window[callbackVarName];
+                    delete window[callbackVarName];
+                    script.remove();
+                    if (result && result.code === 0) {
+                        resolve(result);
+                    } else {
+                        reject(new Error('K线行情源解析失败'));
+                    }
+                };
+                script.onerror = () => {
+                    script.remove();
+                    reject(new Error('K线服务器网络异常'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // 行情数据源 2：拉取实时最新数据 (P_昨收, P_最低, P_当前价, 当日成交量)
+        function fetchRealTimeQuote(marketCode) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = `https://qt.gtimg.cn/q=${marketCode}`;
+                
+                script.onload = () => {
+                    const globalVarName = 'v_' + marketCode;
+                    const dataStr = window[globalVarName];
+                    delete window[globalVarName];
+                    script.remove();
+                    if (dataStr) {
+                        resolve(dataStr);
+                    } else {
+                        reject(new Error('实时行情源未匹配到该代码'));
+                    }
+                };
+                script.onerror = () => {
+                    script.remove();
+                    reject(new Error('实时服务器连接超时'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // 异步数据抓取及计算核心
+        async function autoLoadStockData() {
+            const searchInput = document.getElementById('input-search-code');
+            const codeRaw = searchInput.value.trim();
+            if (!codeRaw) {
+                showToast('请输入股票或ETF代码', 'warning');
+                return;
+            }
+
+            const marketCode = resolveMarketCode(codeRaw);
+            if (!marketCode) {
+                showToast('无效代码，请输入6位A股或5位港股代码', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btn-fetch-stock');
+            const spinner = document.getElementById('fetch-btn-spinner');
+            const btnText = document.getElementById('fetch-btn-text');
+            const indicator = document.getElementById('fetch-result-indicator');
+            const indicatorName = document.getElementById('fetch-stock-name');
+            const indicatorTime = document.getElementById('fetch-stock-time');
+
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+            btnText.innerText = '拉取中';
+
+            try {
+                // 执行抓取
+                const stockDetails = await queryStockDetailMetrics(marketCode, codeRaw);
+                
+                // 数据装填至沙盘
+                document.getElementById('input-close').value = stockDetails.close.toFixed(3);
+                document.getElementById('input-low').value = stockDetails.low.toFixed(3);
+                document.getElementById('input-tail').value = stockDetails.tail.toFixed(3);
+                document.getElementById('input-ma5').value = stockDetails.ma5.toFixed(3);
+                document.getElementById('input-ma10').value = stockDetails.ma10.toFixed(3);
+                
+                // 更新放量动能状态
+                document.getElementById('force-volume-toggle').checked = stockDetails.isVolumeSpike;
+                document.getElementById('volume-label-state').innerText = stockDetails.isVolumeSpike ? "🔥 检测到尾盘异常放量 (得2分)" : "🍃 未见异常量能 (得0分)";
+
+                setAssetType(stockDetails.assetType);
+
+                // UI 状态反馈
+                indicator.classList.remove('hidden');
+                indicatorName.innerText = `🟢 已加载: ${stockDetails.name} (${codeRaw.toUpperCase()})`;
+                const now = new Date();
+                indicatorTime.innerText = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')} 同步`;
+
+                showToast(`[${stockDetails.name}] 行情及均线矩阵加载成功`, 'success');
+                calculateDecision();
+
+            } catch (err) {
+                showToast(err.message || '数据解析失败，请检查网络后重试', 'error');
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('hidden');
+                btnText.innerText = '抓取数据';
+            }
+        }
+
+        // 统一多标的数据探测算法
+        async function queryStockDetailMetrics(marketCode, codeRaw) {
+            const [rtResultStr, klineResult] = await Promise.all([
+                fetchRealTimeQuote(marketCode),
+                fetchStockData(marketCode)
+            ]);
+
+            const parts = rtResultStr.split('~');
+            if (parts.length < 35) {
+                throw new Error('行情解析失败');
+            }
+
+            const name = parts[1];
+            const tailPrice = parseFloat(parts[3]);
+            const closePrice = parseFloat(parts[4]);
+            const lowPrice = parseFloat(parts[34]);
+            const todayVolume = parseFloat(parts[6]); // 手
+
+            // K线解构
+            const dataBlock = klineResult.data?.[marketCode];
+            if (!dataBlock) {
+                throw new Error('K线数据获取失败');
+            }
+            const dayData = dataBlock.day || dataBlock.qfqday;
+            if (!dayData || dayData.length < 10) {
+                throw new Error('K线周期少于10天');
+            }
+
+            // 动态均线及放量计算
+            const closes = dayData.slice(-10).map(d => parseFloat(d[2]));
+            // 将最后一天的临时收盘价动态替换为 2:50 实时价以校准
+            if (closes.length > 0) {
+                closes[closes.length - 1] = tailPrice;
+            }
+
+            // 计算 MA5 和 MA10
+            const ma5 = closes.slice(-5).reduce((s, v) => s + v, 0) / 5;
+            const ma10 = closes.reduce((s, v) => s + v, 0) / 10;
+
+            // 获取过去 5 日的成交量 (day[5]) 并算平均量
+            const prevVolumes = dayData.slice(-6, -1).map(d => parseFloat(d[5]));
+            const avgVolume5Days = prevVolumes.reduce((s, v) => s + v, 0) / 5;
+
+            // 是否尾盘异常放量：
+            // 因为现在在下午 2:50 分，已成交时间约占全天的 95%，如果今天的量能达到过去5天日均量的 1.3 倍以上，视作明显的异常放量流入
+            const isVolumeSpike = todayVolume >= (avgVolume5Days * 1.3);
+
+            // 智能区分品种
+            let calculatedAssetType = 'STOCK';
+            if (/^(50|51|52|56|58|15|16)/.test(codeRaw) || /etf/i.test(name)) {
+                calculatedAssetType = 'ETF';
+            }
+
+            return {
+                name,
+                close: closePrice,
+                low: lowPrice,
+                tail: tailPrice,
+                ma5,
+                ma10,
+                isVolumeSpike,
+                assetType: calculatedAssetType
+            };
+        }
+
+        // ==================== 🔍 全市场扫描挖掘模块 ====================
+        let lastScanResults = null;
+
+        async function runMarketScan() {
+            const btn = document.getElementById('btn-master-scan');
+            const progressContainer = document.getElementById('scan-progress-container');
+            const progressBar = document.getElementById('scan-progress-bar');
+            const progressPercent = document.getElementById('scan-progress-percent');
+            const progressText = document.getElementById('scan-progress-text');
+            const listContainer = document.getElementById('scan-list-container');
+            const resultsCount = document.getElementById('scan-results-count');
+            const spinner = document.getElementById('spinner-icon-master');
+
+            btn.disabled = true;
+            spinner.classList.add('animate-spin');
+            progressContainer.classList.remove('hidden');
+            listContainer.innerHTML = '';
+            resultsCount.innerText = '正在扫描...';
+
+            const total = SCAN_POOL.length;
+            const results = [];
+
+            for (let i = 0; i < total; i++) {
+                const item = SCAN_POOL[i];
+                const percent = Math.round(((i + 1) / total) * 100);
+                progressText.innerText = `正在穿透拉取: ${item.name} (${item.code})`;
+                progressBar.style.width = `${percent}%`;
+                progressPercent.innerText = `${percent}%`;
+
+                try {
+                    const marketCode = resolveMarketCode(item.code);
+                    const metrics = await queryStockDetailMetrics(marketCode, item.code);
+
+                    // 计算量化分数
+                    const maxDrop = ((metrics.low - metrics.close) / metrics.close) * 100;
+                    
+                    let recoveryRate = 0;
+                    if (metrics.close !== metrics.low) {
+                        recoveryRate = ((metrics.tail - metrics.low) / (metrics.close - metrics.low)) * 100;
+                    } else {
+                        recoveryRate = 100;
+                    }
+                    if (recoveryRate < 0) recoveryRate = 0;
+                    if (recoveryRate > 100) recoveryRate = 100;
+
+                    // 算分：
+                    // 1. 均线分
+                    let scoreTrend = 1.5;
+                    if (metrics.tail > metrics.ma5 && metrics.tail > metrics.ma10) scoreTrend = 3.0;
+                    else if (metrics.tail < metrics.ma5 && metrics.tail < metrics.ma10) scoreTrend = 0.0;
+
+                    // 2. 形态分
+                    let scoreRecovery = 0;
+                    if (recoveryRate >= 40.0) scoreRecovery = 5.0;
+                    else if (recoveryRate >= 15.0) scoreRecovery = 2.5;
+
+                    // 3. 动能分
+                    let scoreVolume = metrics.isVolumeSpike ? 2.0 : 0.0;
+
+                    const totalScore = scoreTrend + scoreRecovery + scoreVolume;
+
+                    results.push({
+                        code: item.code,
+                        name: item.name,
+                        close: metrics.close,
+                        low: metrics.low,
+                        tail: metrics.tail,
+                        ma5: metrics.ma5,
+                        ma10: metrics.ma10,
+                        maxDrop,
+                        recoveryRate,
+                        isVolumeSpike: metrics.isVolumeSpike,
+                        score: totalScore,
+                        assetType: metrics.assetType
+                    });
+
+                } catch (err) {
+                    console.error(`扫描失败标的: ${item.name}`, err);
+                }
+
+                // 适当的防限流小延时 (100毫秒)
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // 按得分由高至低重排结果
+            results.sort((a, b) => b.score - a.score);
+            lastScanResults = results;
+
+            // 渲染视图
+            renderScanResults(results);
+
+            btn.disabled = false;
+            spinner.classList.remove('animate-spin');
+            progressContainer.classList.add('hidden');
+        }
+
+        // 渲染挖掘结果卡片列表
+        function renderScanResults(results) {
+            const listContainer = document.getElementById('scan-list-container');
+            const resultsCount = document.getElementById('scan-results-count');
+
+            if (results.length === 0) {
+                listContainer.innerHTML = `<div class="text-xs text-slate-500 text-center py-6">未成功扫描任何标的</div>`;
+                resultsCount.innerText = '共 0 个标的';
+                return;
+            }
+
+            resultsCount.innerText = `共 ${results.length} 个标的`;
+            listContainer.innerHTML = '';
+
+            results.forEach(item => {
+                // 根据当前选择的扫描器风格偏好判定其对应指令
+                let stateColor = 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
+                let actionText = '锁仓观察';
+                
+                const thresholdValue = (item.assetType === 'ETF') ? -3.0 : -4.0;
+
+                if (item.maxDrop > thresholdValue && item.score >= 5.0) {
+                    stateColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+                    actionText = '无恐慌盘';
+                } else if (item.score >= 8.0) {
+                    stateColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                    actionText = (scanStyle === 'AGGRESSIVE') ? '果断满仓' : '果断加仓';
+                } else if (item.score >= 5.0) {
+                    if (scanStyle === 'AGGRESSIVE') {
+                        stateColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+                        actionText = '激进加仓';
+                    } else {
+                        stateColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+                        actionText = '锁仓观察';
+                    }
+                } else if (item.score <= 2.5) {
+                    stateColor = 'text-red-400 bg-red-500/10 border-red-500/20 animate-pulse';
+                    actionText = '果断斩仓';
+                }
+
+                const card = document.createElement('div');
+                card.className = "flex items-center justify-between p-3 bg-slate-950/60 hover:bg-slate-950 border border-slate-900 hover:border-amber-500/30 rounded-xl transition duration-150 cursor-pointer";
+                card.onclick = () => importToCalculator(item);
+
+                card.innerHTML = `
+                    <div class="flex flex-col gap-1 min-w-0">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold text-slate-200 truncate">${item.name}</span>
+                            <span class="text-[9px] font-mono text-slate-500 font-bold">${item.code}</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] text-slate-400 font-bold font-mono">
+                            <span>跌幅: <span class="text-red-500">${item.maxDrop.toFixed(2)}%</span></span>
+                            <span>收复: <span class="text-blue-400">${item.recoveryRate.toFixed(1)}%</span></span>
+                            ${item.isVolumeSpike ? '<span class="text-amber-500 text-[8px] border border-amber-500/20 bg-amber-500/10 px-1 rounded">放量</span>' : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-3 shrink-0">
+                        <!-- 得分球 -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[8px] text-slate-500 uppercase tracking-widest font-black">打分</span>
+                            <span class="text-md font-black text-amber-400 font-mono leading-none">${item.score.toFixed(1)}</span>
+                        </div>
+                        
+                        <!-- 快速决策牌 -->
+                        <span class="px-2.5 py-1.5 rounded-lg text-xs font-black border tracking-wider ${stateColor}">
+                            ${actionText}
+                        </span>
+                    </div>
+                `;
+
+                listContainer.appendChild(card);
+            });
+
+            showToast(`智能挖掘完成，已加载最强主力盘口`, 'success');
+        }
+
+        // 点击将扫描结果一键导入沙盘计算器
+        function importToCalculator(item) {
+            document.getElementById('input-close').value = item.close.toFixed(3);
+            document.getElementById('input-low').value = item.low.toFixed(3);
+            document.getElementById('input-tail').value = item.tail.toFixed(3);
+            document.getElementById('input-ma5').value = item.ma5.toFixed(3);
+            document.getElementById('input-ma10').value = item.ma10.toFixed(3);
+            document.getElementById('force-volume-toggle').checked = item.isVolumeSpike;
+            document.getElementById('volume-label-state').innerText = item.isVolumeSpike ? "🔥 检测到尾盘异常放量 (得2分)" : "🍃 未见异常量能 (得0分)";
+            
+            document.getElementById('input-search-code').value = item.code;
+            
+            setAssetType(item.assetType);
+            setTradeStyle(scanStyle); // 将计算器风格也自适应统一
+            
+            // 提示导入成功
+            showToast(`已成功导入 [${item.name}] 至决策沙盘计算器`, 'success');
+
+            // 瞬间跳转回计算器面板
+            switchTab('calculator');
+            
+            // 实时触发量化决策
+            calculateDecision();
+        }
+
+        // 高端自定义浮动 Toast 通知机制 (杜绝浏览器 alert 弹框)
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `p-3.5 rounded-xl shadow-2xl text-xs font-black flex items-center gap-2 border transition duration-300 transform translate-y-[-10px] opacity-0 pointer-events-auto`;
+            
+            let bgClass = 'bg-slate-900 border-slate-800 text-slate-200';
+            let icon = 'ℹ️';
+
+            if (type === 'success') {
+                bgClass = 'bg-green-950/90 border-green-500/30 text-green-400';
+                icon = '🟢';
+            } else if (type === 'error') {
+                bgClass = 'bg-red-950/90 border-red-500/30 text-red-400';
+                icon = '🔴';
+            } else if (type === 'warning') {
+                bgClass = 'bg-amber-950/90 border-amber-500/30 text-amber-400';
+                icon = '⚠️';
+            }
+
+            toast.className += ` ${bgClass}`;
+            toast.innerHTML = `<span>${icon}</span> <span class="flex-1">${message}</span>`;
+            
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
