@@ -102,12 +102,17 @@
             
             <!-- 智能代码一键抓取面板 (腾讯 JSONP 无 CORS) -->
             <div class="glass-card rounded-2xl p-4 shadow-2xl flex flex-col gap-3 border border-amber-500/10">
-                <span class="text-[11px] font-bold tracking-wider text-amber-400/90 flex items-center gap-1.5 uppercase">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    智能一键行情抓取 (自动测算MA5/MA10/量能)
-                </span>
+                <div class="flex justify-between items-center">
+                    <span class="text-[11px] font-bold tracking-wider text-amber-400/90 flex items-center gap-1.5 uppercase">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        智能一键行情抓取与后视镜回测
+                    </span>
+                    <span id="backtest-mode-badge" class="px-1.5 py-0.5 rounded text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase font-black">
+                        ⚡ 实时最新
+                    </span>
+                </div>
                 <div class="flex gap-2">
                     <div class="relative flex-1">
                         <input id="input-search-code" type="text" placeholder="输入代码 (如 560780 或 159992)" 
@@ -118,6 +123,19 @@
                         <span id="fetch-btn-text">抓取数据</span>
                     </button>
                 </div>
+
+                <!-- 🚀 后视镜核心控制器：历史日期选择器 -->
+                <div class="flex flex-col gap-1.5 bg-slate-950/40 p-2.5 rounded-xl border border-slate-900">
+                    <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                        <span>⏳ 历史回测复盘 (选择后视镜日期)</span>
+                        <span id="history-total-days" class="text-slate-500 font-mono">未载入数据</span>
+                    </div>
+                    <select id="select-history-date" onchange="applyHistoricalDate()" disabled
+                        class="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300 font-bold focus:outline-none focus:border-amber-500/50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                        <option value="">请先在上方输入代码抓取标的数据...</option>
+                    </select>
+                </div>
+
                 <!-- 抓取成功提示栏 -->
                 <div id="fetch-result-indicator" class="hidden flex items-center justify-between text-[10px] bg-slate-950/60 border border-slate-900 px-3 py-2 rounded-xl">
                     <span id="fetch-stock-name" class="font-bold text-amber-300"></span>
@@ -196,7 +214,7 @@
 
                 <!-- ⚠️ [修复] 补全在 HTML 结构中缺失的物理校验警告栏 -->
                 <div id="physical-warning" class="hidden text-[10px] text-red-400 font-bold bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl text-center">
-                    ⚠️ 数据违反物理规则：最低价不得高于昨收价，且当前价格不得低于盘中最低价。
+                    ⚠️ 数据违反物理规则：当前价格不得低于盘中最低价。
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -423,6 +441,10 @@
         let activeTab = 'calculator'; // 'calculator' | 'scanner'
         let scanStyle = 'AGGRESSIVE'; // 'AGGRESSIVE' | 'CONSERVATIVE'
         let userWatchlist = ['560780', '159992', '513180']; // 默认自选股池
+        
+        // 🚀 后视镜核心状态存储
+        let activeStockKlines = []; // 存储当前查询标的的 200 日 K 线原始数组
+        let isBacktestMode = false; // 是否处于后视镜历史回测模式
 
         // 扫描标的池(A股和港股主要行业高弹性标的)
         const SCAN_POOL = [
@@ -539,24 +561,6 @@
             }
         }
 
-        // 加载预设场景
-        function loadPreset(presetName) {
-            const presets = {
-                v_shape_bull: { close: 10.00, low: 9.30, tail: 9.80, ma5: 9.50, ma10: 9.30, forceVolume: true, asset: 'ETF' }
-            };
-
-            const data = presets[presetName];
-            if (data) {
-                document.getElementById('input-close').value = data.close;
-                document.getElementById('input-low').value = data.low;
-                document.getElementById('input-tail').value = data.tail;
-                document.getElementById('input-ma5').value = data.ma5;
-                document.getElementById('input-ma10').value = data.ma10;
-                document.getElementById('force-volume-toggle').checked = data.forceVolume;
-                setAssetType(data.asset);
-            }
-        }
-
         // 核心量化打分和决策引擎
         function calculateDecision() {
             const pClose = parseFloat(document.getElementById('input-close').value);
@@ -578,28 +582,29 @@
                 return;
             }
 
-            // A股物理逻辑校验
+            // ⚡ [修复逻辑死穴]: 移除 pLow > pClose 的限制。因为高开（Gap Up）跳空时，全天的最低价绝对可以大于昨收价。
+            // 真实的金融物理世界里，唯一的数学红线是“当前价格不得低于盘中最低价”（pTail < pLow）
             let isPhysicalError = false;
-            if (pLow > pClose || pTail < pLow) {
+            if (pTail < pLow) {
                 isPhysicalError = true;
             }
 
             if (isPhysicalError) {
-                warningBlock.classList.remove('hidden');
+                if (warningBlock) warningBlock.classList.remove('hidden');
                 decCard.className = "glass-card rounded-2xl p-6 border-red-500/30 flex flex-col gap-4 text-center items-center justify-center min-h-[170px]";
                 decCard.innerHTML = `
                     <div class="text-red-400">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>
-                        <p class="text-xs font-bold tracking-wider">数据不符合交易逻辑，请修正您的输入</p>
+                        <p class="text-xs font-bold tracking-wider">数据违反物理规则：尾盘价格（P_当前）不得低于日内最低价（P_最低）</p>
                     </div>
                 `;
                 chartCard.classList.add('hidden');
                 scoreCard.classList.add('hidden');
                 return;
             } else {
-                warningBlock.classList.add('hidden');
+                if (warningBlock) warningBlock.classList.add('hidden');
             }
 
             chartCard.classList.remove('hidden');
@@ -608,11 +613,16 @@
             // 2. 计算量化基础因子
             const maxDrop = ((pLow - pClose) / pClose) * 100;
 
+            // ⚡ [修复逻辑漏洞]：若发生跳空高开高走，pLow >= pClose。此时说明日内连零度线下都没跌穿，直接锁定为 100% 影子收复率（满分），杜绝除法负数和溢出
             let recoveryRate = 0;
-            if (pClose !== pLow) {
-                recoveryRate = ((pTail - pLow) / (pClose - pLow)) * 100;
-            } else {
+            if (pLow >= pClose) {
                 recoveryRate = 100;
+            } else {
+                if (pClose !== pLow) {
+                    recoveryRate = ((pTail - pLow) / (pClose - pLow)) * 100;
+                } else {
+                    recoveryRate = 100;
+                }
             }
             if (recoveryRate < 0) recoveryRate = 0;
             if (recoveryRate > 100) recoveryRate = 100;
@@ -715,13 +725,13 @@
                                 安全边际充沛，果断买入加仓
                             </h2>
                             <p class="text-xs text-slate-300 max-w-sm leading-relaxed font-semibold">
-                                均线环境呈现安全多头态势，且深 V 回升过半。保守风格确认无趋势杀跌风险，属于极高确定性的右侧狙击点，执行冷血决策买入！
+                                均线环境呈现安全多头态势，且深 V 回升过半。保守风格确认无趋势杀跌风险，属于极高确定性的右侧狙击点，执行 cold-blood 决策买入！
                             </p>
                         </div>
                     `;
                 }
             }
-            // B. 【5 - 7.5 分】：大趋势欠佳但当天出现极为狂暴的强力深V，或者大趋势完美但仅仅轻微抵抗
+            // B. 【5 - 7.5 分】：大趋势欠佳但当天出现极为狂暴的强力深V，或者大趋势完美大反弹
             else if (totalScore >= 5.0 && totalScore <= 7.5) {
                 if (tradeStyle === 'AGGRESSIVE') {
                     decCard.className = "glass-card rounded-2xl p-5 glow-green border-emerald-500 bg-emerald-950/15 transition duration-300 flex flex-col gap-3 text-center items-center justify-center min-h-[170px]";
@@ -907,6 +917,17 @@
             document.getElementById('force-volume-toggle').checked = false;
             document.getElementById('volume-label-state').innerText = "检测中 / 无放量";
             
+            // 🚀 重置后视镜状态
+            activeStockKlines = [];
+            isBacktestMode = false;
+            document.getElementById('backtest-mode-badge').innerText = "⚡ 实时最新";
+            document.getElementById('backtest-mode-badge').className = "px-1.5 py-0.5 rounded text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase font-black";
+            
+            const selectHist = document.getElementById('select-history-date');
+            selectHist.innerHTML = '<option value="">请先在上方输入代码抓取标的数据...</option>';
+            selectHist.disabled = true;
+            document.getElementById('history-total-days').innerText = "未载入数据";
+
             // 隐藏及重置
             document.getElementById('chart-card').classList.add('hidden');
             document.getElementById('physical-warning').classList.add('hidden');
@@ -925,7 +946,7 @@
             `;
         }
 
-        // ==================== 🚀 智能 JSONP 数据拉取模块 ====================
+        // ==================== 🚀 智能 JSONP 数据拉取模块 (升级至 200 日深度支持后视镜) ====================
 
         // 解析股票代码前缀
         function resolveMarketCode(code) {
@@ -949,12 +970,12 @@
             return null;
         }
 
-        // 行情数据源 1：拉取 K线数据 (计算MA5/MA10和成交量均值)
+        // 行情数据源 1：拉取 K线数据 (升级：抓取200天历史交易日用于后视镜)
         function fetchStockData(marketCode) {
             return new Promise((resolve, reject) => {
                 const callbackVarName = 'kline_' + marketCode + '_' + Date.now();
                 const script = document.createElement('script');
-                script.src = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=${callbackVarName}&param=${marketCode},day,,,10,qfq`;
+                script.src = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=${callbackVarName}&param=${marketCode},day,,,200,qfq`;
                 
                 script.onload = () => {
                     const result = window[callbackVarName];
@@ -1026,21 +1047,29 @@
             btnText.innerText = '拉取中';
 
             try {
-                // 执行抓取
+                // 执行一键抓取 (包含200天历史大池)
                 const stockDetails = await queryStockDetailMetrics(marketCode, codeRaw);
                 
-                // 数据装填至沙盘
+                // 1. 数据装填至沙盘 (默认加载最新的实时数据)
                 document.getElementById('input-close').value = stockDetails.close.toFixed(3);
                 document.getElementById('input-low').value = stockDetails.low.toFixed(3);
                 document.getElementById('input-tail').value = stockDetails.tail.toFixed(3);
                 document.getElementById('input-ma5').value = stockDetails.ma5.toFixed(3);
                 document.getElementById('input-ma10').value = stockDetails.ma10.toFixed(3);
                 
-                // 更新放量动能状态
+                // 2. 更新放量动能状态
                 document.getElementById('force-volume-toggle').checked = stockDetails.isVolumeSpike;
                 document.getElementById('volume-label-state').innerText = stockDetails.isVolumeSpike ? "🔥 检测到尾盘异常放量 (得2分)" : "🍃 未见异常量能 (得0分)";
 
                 setAssetType(stockDetails.assetType);
+
+                // 3. 🚀 激活后视镜下拉选择器 (渲染 K 线历史数组)
+                activeStockKlines = stockDetails.allKlines; // 存储历史数据
+                isBacktestMode = false; // 默认回归实时
+                document.getElementById('backtest-mode-badge').innerText = "⚡ 实时最新";
+                document.getElementById('backtest-mode-badge').className = "px-1.5 py-0.5 rounded text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase font-black";
+
+                renderHistoryDatePicker(stockDetails.allKlines);
 
                 // UI 状态反馈
                 indicator.classList.remove('hidden');
@@ -1048,7 +1077,7 @@
                 const now = new Date();
                 indicatorTime.innerText = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')} 同步`;
 
-                showToast(`[${stockDetails.name}] 行情及均线矩阵加载成功`, 'success');
+                showToast(`[${stockDetails.name}] 200日历史及最新行情装载成功`, 'success');
                 calculateDecision();
 
             } catch (err) {
@@ -1058,6 +1087,108 @@
                 spinner.classList.add('hidden');
                 btnText.innerText = '抓取数据';
             }
+        }
+
+        // 渲染历史日期下拉菜单
+        function renderHistoryDatePicker(klines) {
+            const selectHist = document.getElementById('select-history-date');
+            const totalLabel = document.getElementById('history-total-days');
+            
+            // 必须保留至少10个前置交易日来计算历史 MA10，因此最老的数据无法用于回测
+            if (!klines || klines.length <= 10) {
+                selectHist.innerHTML = '<option value="">历史深度不足，无法回测</option>';
+                selectHist.disabled = true;
+                totalLabel.innerText = "数据不足";
+                return;
+            }
+
+            // 清空选择
+            selectHist.innerHTML = '';
+            
+            // 加入默认选项 (实时最新选项)
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = "REALTIME";
+            defaultOpt.innerText = "⚡ 实时最新当前价盘口 (不开启后视镜)";
+            selectHist.appendChild(defaultOpt);
+
+            // 倒序排列 K 线日期，让最近的日期排在最上面，方便回测近期的交易日
+            for (let i = klines.length - 1; i >= 10; i--) {
+                const candle = klines[i];
+                const dateStr = candle[0];
+                const opt = document.createElement('option');
+                opt.value = i; // 存储该交易日在 K 线大数组中的原索引
+                opt.innerText = `⏳ ${dateStr} (收盘价:${parseFloat(candle[2]).toFixed(2)} | 最低:${parseFloat(candle[4]).toFixed(2)})`;
+                selectHist.appendChild(opt);
+            }
+
+            selectHist.disabled = false;
+            totalLabel.innerText = `已载入 ${klines.length} 个交易日`;
+        }
+
+        // 🚀 后视镜一秒跳转核心函数
+        function applyHistoricalDate() {
+            const selectHist = document.getElementById('select-history-date');
+            const selectedVal = selectHist.value;
+
+            if (!selectedVal) return;
+
+            const badge = document.getElementById('backtest-mode-badge');
+
+            if (selectedVal === "REALTIME") {
+                // 切回实时模式
+                isBacktestMode = false;
+                badge.innerText = "⚡ 实时最新";
+                badge.className = "px-1.5 py-0.5 rounded text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase font-black";
+                
+                // 重新触发抓取最新
+                autoLoadStockData();
+                return;
+            }
+
+            // 开启后视镜
+            isBacktestMode = true;
+            badge.innerText = "⏳ 后视镜回测中";
+            badge.className = "px-1.5 py-0.5 rounded text-[8px] bg-purple-500/15 text-purple-400 border border-purple-500/30 uppercase font-black";
+
+            const idx = parseInt(selectedVal);
+            const klines = activeStockKlines;
+
+            // 读取历史交易日 T
+            const candleT = klines[idx];
+            // 读取前一日 T-1
+            const candlePrev = klines[idx - 1];
+
+            // 1. 还原价格参数
+            const pClose = parseFloat(candlePrev[2]); // T-1 日的收盘价
+            const pLow = parseFloat(candleT[4]);      // T 日的最低价
+            const pTail = parseFloat(candleT[2]);     // T 日的最终收盘价 (作为 14:50 当前价的最佳无偏估计)
+
+            // 2. 动态滑动窗口测算 MA5/MA10
+            const closesMA5 = klines.slice(idx - 4, idx + 1).map(d => parseFloat(d[2]));
+            const closesMA10 = klines.slice(idx - 9, idx + 1).map(d => parseFloat(d[2]));
+
+            const ma5 = closesMA5.reduce((s, v) => s + v, 0) / 5;
+            const ma10 = closesMA10.reduce((s, v) => s + v, 0) / 10;
+
+            // 3. 动态计算历史成交量是否发生异常放量
+            const todayVolume = parseFloat(candleT[5]); // T日成交量
+            const prevVolumes = klines.slice(idx - 5, idx).map(d => parseFloat(d[5])); // T-1 到 T-5 日成交量
+            const avgVolume5Days = prevVolumes.reduce((s, v) => s + v, 0) / 5;
+
+            const isVolumeSpike = todayVolume >= (avgVolume5Days * 1.3);
+
+            // 4. 填充至前端表单
+            document.getElementById('input-close').value = pClose.toFixed(3);
+            document.getElementById('input-low').value = pLow.toFixed(3);
+            document.getElementById('input-tail').value = pTail.toFixed(3);
+            document.getElementById('input-ma5').value = ma5.toFixed(3);
+            document.getElementById('input-ma10').value = ma10.toFixed(3);
+            document.getElementById('force-volume-toggle').checked = isVolumeSpike;
+            
+            document.getElementById('volume-label-state').innerText = isVolumeSpike ? "🔥 探测到历史该日异常放量 (得2分)" : "🍃 未见历史异常量能 (得0分)";
+
+            showToast(`已穿越回测 [${candleT[0]}] 历史尾盘盘口`, 'info');
+            calculateDecision();
         }
 
         // 统一多标的数据探测算法 (解决14:50时间差滞后漏洞)
@@ -1100,10 +1231,14 @@
             if (marketTodayDate === lastKlineDate) {
                 // 如果相同，说明K线已经注册了今日烛台，直接动态校准最新的价格
                 closes[closes.length - 1] = tailPrice;
+                dayData[dayData.length - 1][2] = tailPrice; // 历史大池也同步覆盖更新
+                dayData[dayData.length - 1][4] = lowPrice;
+                dayData[dayData.length - 1][5] = todayVolume;
             } else {
                 // 如果不同（说明正处于 14:50 临场，K线还没更新今日数据），我们把最新价追加(Push)进去，并剔除最老的数据
                 closes.push(tailPrice);
                 closes.shift();
+                dayData.push([marketTodayDate, parts[5], tailPrice, parts[33], lowPrice, todayVolume]);
             }
 
             // 重新科学测算均线
@@ -1131,11 +1266,12 @@
                 ma5,
                 ma10,
                 isVolumeSpike,
-                assetType: calculatedAssetType
+                assetType: calculatedAssetType,
+                allKlines: dayData // 🚀 传出完整的 200 日 K 线，给后视镜做池子
             };
         }
 
-        // ==================== ⭐️ 持久化持仓自选控制引擎 ====================
+        // ==================== ⭐️ 持久化持仓自选控制引擎 (双向指示灯) ====================
         function renderStaticWatchlist() {
             const container = document.getElementById('watchlist-render-container');
             const countLabel = document.getElementById('watchlist-count');
@@ -1215,7 +1351,14 @@
                     if(nameLabel) nameLabel.innerText = `${metrics.name} | 跌: ${((metrics.low-metrics.close)/metrics.close*100).toFixed(1)}%`;
 
                     const maxDrop = ((metrics.low - metrics.close) / metrics.close) * 100;
-                    let rRate = (metrics.close !== metrics.low) ? ((metrics.tail - metrics.low) / (metrics.close - metrics.low)) * 100 : 100;
+                    
+                    // 同样同步修正自选股中的高开溢出逻辑
+                    let rRate = 0;
+                    if (metrics.low >= metrics.close) {
+                        rRate = 100;
+                    } else {
+                        rRate = (metrics.close !== metrics.low) ? ((metrics.tail - metrics.low) / (metrics.close - metrics.low)) * 100 : 100;
+                    }
                     if (rRate < 0) rRate = 0; if (rRate > 100) rRate = 100;
                     
                     let scoreTrend = (metrics.tail > metrics.ma5 && metrics.tail > metrics.ma10) ? 3.0 : (((metrics.tail >= metrics.ma5 && metrics.tail <= metrics.ma10) || (metrics.tail >= metrics.ma10 && metrics.tail <= metrics.ma5)) ? 1.5 : 0.0);
@@ -1319,11 +1462,16 @@
                     // 计算量化分数
                     const maxDrop = ((metrics.low - metrics.close) / metrics.close) * 100;
                     
+                    // 同样同步修正全市场扫描的高开溢出逻辑
                     let recoveryRate = 0;
-                    if (metrics.close !== metrics.low) {
-                        recoveryRate = ((metrics.tail - metrics.low) / (metrics.close - metrics.low)) * 100;
-                    } else {
+                    if (metrics.low >= metrics.close) {
                         recoveryRate = 100;
+                    } else {
+                        if (metrics.close !== metrics.low) {
+                            recoveryRate = ((metrics.tail - metrics.low) / (metrics.close - metrics.low)) * 100;
+                        } else {
+                            recoveryRate = 100;
+                        }
                     }
                     if (recoveryRate < 0) recoveryRate = 0;
                     if (recoveryRate > 100) recoveryRate = 100;
