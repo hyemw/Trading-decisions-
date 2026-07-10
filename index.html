@@ -97,7 +97,7 @@
         <!-- ================= TAB 1: 沙盘计算器主面板 ================= -->
         <div id="tab-calculator" class="flex flex-col gap-4">
             
-            <!-- 智能代码一键抓取面板 -->
+            <!-- 智能代码一键抓取面板 (腾讯 JSONP 无 CORS) -->
             <div class="glass-card rounded-2xl p-4 shadow-2xl flex flex-col gap-3 border border-amber-500/10">
                 <span class="text-[11px] font-bold tracking-wider text-amber-400/90 flex items-center gap-1.5 uppercase">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -189,6 +189,11 @@
                             </label>
                         </div>
                     </div>
+                </div>
+
+                <!-- ⚠️ [修复] 补全在 HTML 结构中缺失的物理校验警告栏 -->
+                <div id="physical-warning" class="hidden text-[10px] text-red-400 font-bold bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl text-center">
+                    ⚠️ 数据违反物理规则：最低价不得高于昨收价，且当前价格不得低于盘中最低价。
                 </div>
 
                 <div class="grid grid-cols-2 gap-2">
@@ -305,33 +310,6 @@
                 </div>
             </div>
 
-            <!-- ================= 新增：自选股云端雷盘 ================= -->
-            <div class="glass-card rounded-2xl p-5 shadow-2xl flex flex-col gap-4 border border-blue-500/10">
-                <div class="flex items-center justify-between border-b border-slate-850/60 pb-3">
-                    <span class="text-xs font-bold text-blue-400 tracking-wider flex items-center gap-1.5 uppercase">
-                        ⭐ 我的专属自选股雷盘 (Local Persistent)
-                    </span>
-                    <button onclick="refreshWatchlist()" class="text-[10px] font-bold text-blue-500 hover:text-blue-400 flex items-center gap-1 shrink-0">
-                        🔄 刷新全榜
-                    </button>
-                </div>
-
-                <!-- 极简快速添加输入栏 -->
-                <div class="flex gap-2 text-xs">
-                    <input id="watchlist-add-code" type="text" placeholder="输入股票代码 (如 159992)" 
-                        class="flex-1 bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 font-bold focus:outline-none focus:border-blue-500 uppercase tracking-widest">
-                    <button onclick="addToWatchlist()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-slate-100 font-bold rounded-lg transition duration-150 shrink-0">
-                        ➕ 添加
-                    </button>
-                </div>
-
-                <!-- 自选列表卡片 -->
-                <div id="watchlist-container" class="flex flex-col gap-2 max-h-[250px] overflow-y-auto">
-                    <!-- 动态注入自选股卡片 -->
-                    <p class="text-center text-[10px] text-slate-600 py-4">您的自选列表空空如也，请在上方添加你的重仓底牌。</p>
-                </div>
-            </div>
-
         </div>
 
         <!-- ================= TAB 2: 全市场智能扫描挖掘 ================= -->
@@ -406,42 +384,6 @@
         let tradeStyle = 'AGGRESSIVE'; // 'AGGRESSIVE' | 'CONSERVATIVE'
         let activeTab = 'calculator'; // 'calculator' | 'scanner'
         let scanStyle = 'AGGRESSIVE'; // 'AGGRESSIVE' | 'CONSERVATIVE'
-
-        // 默认自选股池
-        let myWatchlist = [];
-
-        // 扫描标的池(A股和港股主要行业高弹性标的)
-        const SCAN_POOL = [
-            { code: '560780', name: '半导体设备 ETF', type: 'ETF' },
-            { code: '159992', name: '创新药 ETF', type: 'ETF' },
-            { code: '513180', name: '恒生科技 ETF', type: 'ETF' },
-            { code: '588000', name: '科创50 ETF', type: 'ETF' },
-            { code: '159915', name: '创业板 ETF', type: 'ETF' },
-            { code: '512660', name: '军工 ETF', type: 'ETF' },
-            { code: '159869', name: '游戏 ETF', type: 'ETF' },
-            { code: '512480', name: '半导体 ETF', type: 'ETF' },
-            { code: '159995', name: '芯片 ETF', type: 'ETF' },
-            { code: '510300', name: '沪深300 ETF', type: 'ETF' },
-            { code: '512010', name: '医药 ETF', type: 'ETF' },
-            { code: '159939', name: '信息技术 ETF', type: 'ETF' }
-        ];
-
-        // 页面初始化加载自选股
-        window.addEventListener('load', () => {
-            const saved = localStorage.getItem('trade250_watchlist');
-            if (saved) {
-                myWatchlist = JSON.parse(saved);
-            } else {
-                // 默认赠送两只弹性极高的底牌
-                myWatchlist = [
-                    { code: '560780', name: '半导体设备 ETF' },
-                    { code: '159992', name: '创新药 ETF' }
-                ];
-                saveWatchlist();
-            }
-            renderWatchlistUI();
-            refreshWatchlist(); // 初始全自动跑一遍自选股测算
-        });
 
         // 切换TAB页
         function switchTab(tab) {
@@ -602,26 +544,8 @@
             drawSlickChart(pClose, pLow, pTail, pMA5, pMA10, maxDrop, recoveryRate);
 
             // 4. 【10分制核心打分量化系统】
-            const metrics = runComputeMetrics(pClose, pLow, pTail, pMA5, pMA10, forceVolume);
-
-            // 5. 更新仪表盘 UI
-            updateScoreboardUI(metrics.scoreTrend, metrics.scoreRecovery, metrics.scoreVolume, metrics.totalScore);
-
-            // 6. 10分制精密策略执行决策状态机
-            executeTenPointDecisionMatrix(metrics.totalScore, metrics.scoreRecovery, maxDrop, recoveryRate);
-        }
-
-        // 抽离的打分纯函数 (供计算器与自选股共用)
-        function runComputeMetrics(pClose, pLow, pTail, pMA5, pMA10, forceVolume) {
-            let recoveryRate = 0;
-            if (pClose !== pLow) {
-                recoveryRate = ((pTail - pLow) / (pClose - pLow)) * 100;
-            } else {
-                recoveryRate = 100;
-            }
-            if (recoveryRate < 0) recoveryRate = 0;
-            if (recoveryRate > 100) recoveryRate = 100;
-
+            
+            // 4.1 基础环境分 (看大趋势，满分 3 分)
             let scoreTrend = 0;
             if (!isNaN(pMA5) && !isNaN(pMA10)) {
                 if (pTail > pMA5 && pTail > pMA10) {
@@ -632,9 +556,11 @@
                     scoreTrend = 0.0;
                 }
             } else {
+                // 如果没有提供 MA 数据，默认给中性分 1.5
                 scoreTrend = 1.5;
             }
 
+            // 4.2 日内形态分 (2:50 自救斜率，满分 5 分)
             let scoreRecovery = 0;
             if (recoveryRate >= 40.0) {
                 scoreRecovery = 5.0;
@@ -644,10 +570,16 @@
                 scoreRecovery = 0.0;
             }
 
+            // 4.3 临场动能辅助分 (尾盘放量系数，满分 2 分)
             const scoreVolume = forceVolume ? 2.0 : 0.0;
+            
             const totalScore = scoreTrend + scoreRecovery + scoreVolume;
 
-            return { scoreTrend, scoreRecovery, scoreVolume, totalScore, recoveryRate };
+            // 5. 更新仪表盘 UI
+            updateScoreboardUI(scoreTrend, scoreRecovery, scoreVolume, totalScore);
+
+            // 6. 10分制精密策略执行决策状态机
+            executeTenPointDecisionMatrix(totalScore, scoreRecovery, maxDrop, recoveryRate);
         }
 
         // 10分制精密策略执行决策状态机
@@ -1171,8 +1103,21 @@
                     if (recoveryRate < 0) recoveryRate = 0;
                     if (recoveryRate > 100) recoveryRate = 100;
 
-                    // 计算10分制
-                    const scoreMetrics = runComputeMetrics(metrics.close, metrics.low, metrics.tail, metrics.ma5, metrics.ma10, metrics.isVolumeSpike);
+                    // 算分：
+                    // 1. 均线分
+                    let scoreTrend = 1.5;
+                    if (metrics.tail > metrics.ma5 && metrics.tail > metrics.ma10) scoreTrend = 3.0;
+                    else if (metrics.tail < metrics.ma5 && metrics.tail < metrics.ma10) scoreTrend = 0.0;
+
+                    // 2. 形态分
+                    let scoreRecovery = 0;
+                    if (recoveryRate >= 40.0) scoreRecovery = 5.0;
+                    else if (recoveryRate >= 15.0) scoreRecovery = 2.5;
+
+                    // 3. 动能分
+                    let scoreVolume = metrics.isVolumeSpike ? 2.0 : 0.0;
+
+                    const totalScore = scoreTrend + scoreRecovery + scoreVolume;
 
                     results.push({
                         code: item.code,
@@ -1185,7 +1130,7 @@
                         maxDrop,
                         recoveryRate,
                         isVolumeSpike: metrics.isVolumeSpike,
-                        score: scoreMetrics.totalScore,
+                        score: totalScore,
                         assetType: metrics.assetType
                     });
 
@@ -1296,192 +1241,6 @@
             showToast(`已成功导入 [${item.name}] 至决策沙盘计算器`, 'success');
             switchTab('calculator');
             calculateDecision();
-        }
-
-        // ==================== ⭐ 自选关注云端雷盘逻辑 ====================
-
-        // 本地化存储自选
-        function saveWatchlist() {
-            localStorage.setItem('trade250_watchlist', JSON.stringify(myWatchlist));
-        }
-
-        // 添加自选股
-        async function addToWatchlist() {
-            const input = document.getElementById('watchlist-add-code');
-            const codeRaw = input.value.trim();
-            if (!codeRaw) {
-                showToast('请输入股票或ETF代码', 'warning');
-                return;
-            }
-
-            const marketCode = resolveMarketCode(codeRaw);
-            if (!marketCode) {
-                showToast('无效代码，请输入6位A股或5位港股代码', 'error');
-                return;
-            }
-
-            // 判断是否已存在
-            if (myWatchlist.some(item => item.code === codeRaw)) {
-                showToast('该代码已存在于您的自选股雷盘中', 'warning');
-                return;
-            }
-
-            showToast('正在向云端匹配该资产属性...', 'info');
-
-            try {
-                // 试探抓取基础信息
-                const rtData = await fetchRealTimeQuote(marketCode);
-                const parts = rtData.split('~');
-                const name = parts[1];
-
-                myWatchlist.push({ code: codeRaw, name: name });
-                saveWatchlist();
-                input.value = '';
-                showToast(`[${name}] 已成功添加至自选股雷盘`, 'success');
-                renderWatchlistUI();
-                refreshWatchlist(); // 添加后自动测算一次
-
-            } catch (err) {
-                showToast('代码校验失败或无法获取，请检查网络并重试', 'error');
-            }
-        }
-
-        // 删除自选
-        function removeFromWatchlist(code) {
-            myWatchlist = myWatchlist.filter(item => item.code !== code);
-            saveWatchlist();
-            renderWatchlistUI();
-            showToast('已移出该自选标的', 'info');
-        }
-
-        // 渲染自选列表 UI (骨架屏/未就绪状态)
-        function renderWatchlistUI() {
-            const container = document.getElementById('watchlist-container');
-            if (myWatchlist.length === 0) {
-                container.innerHTML = `<p class="text-center text-[10px] text-slate-600 py-4">您的自选列表空空如也，请在上方添加你的重仓底牌。</p>`;
-                return;
-            }
-
-            container.innerHTML = '';
-            myWatchlist.forEach(item => {
-                const card = document.createElement('div');
-                card.id = `watchlist-card-${item.code}`;
-                card.className = "flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-900 rounded-xl transition duration-150 relative overflow-hidden";
-                card.innerHTML = `
-                    <div class="flex-1 min-w-0" onclick="quickLoadWatchlistItem('${item.code}')">
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-bold text-slate-300 truncate">${item.name}</span>
-                            <span class="text-[9px] font-mono text-slate-500 font-bold">${item.code}</span>
-                        </div>
-                        <p class="text-[9px] text-slate-500 font-bold mt-1" id="watchlist-metrics-${item.code}">正在同步最新主力数据，稍等...</p>
-                    </div>
-                    <div class="flex items-center gap-2 shrink-0">
-                        <div id="watchlist-score-container-${item.code}" class="hidden flex-col items-center">
-                            <span class="text-[7px] text-slate-500 uppercase tracking-widest font-black">评分</span>
-                            <span class="text-sm font-black text-amber-400 font-mono" id="watchlist-score-val-${item.code}">-.-</span>
-                        </div>
-                        <!-- 自选决策牌 -->
-                        <span id="watchlist-badge-${item.code}" class="px-2 py-1 rounded-md text-[10px] font-black border text-slate-500 border-slate-800 bg-slate-900/50">
-                            正在演算
-                        </span>
-                        <!-- 删除 -->
-                        <button onclick="removeFromWatchlist('${item.code}')" class="text-slate-600 hover:text-red-400 p-1 text-xs">
-                            ❌
-                        </button>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        // 一键测算/刷新整个自选列表
-        async function refreshWatchlist() {
-            if (myWatchlist.length === 0) return;
-            showToast('开始穿透自选标的决策测算...', 'info');
-
-            for (let i = 0; i < myWatchlist.length; i++) {
-                const item = myWatchlist[i];
-                const card = document.getElementById(`watchlist-card-${item.code}`);
-                const metricsText = document.getElementById(`watchlist-metrics-${item.code}`);
-                const scoreContainer = document.getElementById(`watchlist-score-container-${item.code}`);
-                const scoreVal = document.getElementById(`watchlist-score-val-${item.code}`);
-                const badge = document.getElementById(`watchlist-badge-${item.code}`);
-
-                try {
-                    const marketCode = resolveMarketCode(item.code);
-                    const metrics = await queryStockDetailMetrics(marketCode, item.code);
-
-                    // 计算10分制各项因子的打分
-                    const maxDrop = ((metrics.low - metrics.close) / metrics.close) * 100;
-                    
-                    let recoveryRate = 0;
-                    if (metrics.close !== metrics.low) {
-                        recoveryRate = ((metrics.tail - metrics.low) / (metrics.close - metrics.low)) * 100;
-                    } else {
-                        recoveryRate = 100;
-                    }
-                    if (recoveryRate < 0) recoveryRate = 0;
-                    if (recoveryRate > 100) recoveryRate = 100;
-
-                    const scoreMetrics = runComputeMetrics(metrics.close, metrics.low, metrics.tail, metrics.ma5, metrics.ma10, metrics.isVolumeSpike);
-
-                    // 更新 UI 指标
-                    metricsText.innerHTML = `跌幅: <span class="text-red-500 font-mono font-bold">${maxDrop.toFixed(2)}%</span> | 收复: <span class="text-blue-400 font-mono font-bold">${recoveryRate.toFixed(1)}%</span>`;
-                    
-                    scoreContainer.classList.remove('hidden');
-                    scoreVal.innerText = scoreMetrics.totalScore.toFixed(1);
-
-                    // 根据10分制总分配合当前偏好决策
-                    let stateColor = 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
-                    let actionText = '锁仓观察';
-                    const thresholdValue = (metrics.assetType === 'ETF') ? -3.0 : -4.0;
-
-                    if (maxDrop > thresholdValue && scoreMetrics.totalScore >= 5.0) {
-                        stateColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
-                        actionText = '无恐慌盘';
-                    } else if (scoreMetrics.totalScore >= 8.0) {
-                        stateColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                        actionText = (tradeStyle === 'AGGRESSIVE') ? '果断满仓' : '果断加仓';
-                    } else if (scoreMetrics.totalScore >= 5.0) {
-                        if (tradeStyle === 'AGGRESSIVE') {
-                            stateColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                            actionText = '激进加仓';
-                        } else {
-                            stateColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20';
-                            actionText = '锁仓观察';
-                        }
-                    } else if (scoreMetrics.totalScore <= 2.5) {
-                        stateColor = 'text-red-400 bg-red-500/10 border-red-500/20';
-                        actionText = '果断斩仓';
-                    }
-
-                    badge.className = `px-2 py-1 rounded-md text-[10px] font-black border tracking-wider ${stateColor}`;
-                    badge.innerText = actionText;
-
-                    // 联动背景微光
-                    if (scoreMetrics.totalScore >= 8.0) {
-                        card.className = "flex items-center justify-between p-2.5 bg-emerald-950/10 hover:bg-emerald-950/20 border border-emerald-500/25 rounded-xl transition duration-150 relative overflow-hidden";
-                    } else if (scoreMetrics.totalScore <= 2.5) {
-                        card.className = "flex items-center justify-between p-2.5 bg-red-950/10 hover:bg-red-950/20 border border-red-500/25 rounded-xl transition duration-150 relative overflow-hidden";
-                    } else {
-                        card.className = "flex items-center justify-between p-2.5 bg-slate-950/60 hover:bg-slate-950 border border-slate-900 rounded-xl transition duration-150 relative overflow-hidden";
-                    }
-
-                } catch (err) {
-                    metricsText.innerHTML = `<span class="text-red-500 font-bold">测算同步失败：网络或代码异常</span>`;
-                }
-
-                // 防限流延迟
-                await new Promise(r => setTimeout(r, 80));
-            }
-            showToast('全自选雷盘多维度判定同步成功！', 'success');
-        }
-
-        // 自选股点击一键载入至主沙箱
-        async function quickLoadWatchlistItem(code) {
-            document.getElementById('input-search-code').value = code;
-            showToast(`正在深度解构自选 [${code}] 至主沙箱`, 'info');
-            await autoLoadStockData();
         }
 
         // ==================== 🚀 智能数据更新及Toast ====================
