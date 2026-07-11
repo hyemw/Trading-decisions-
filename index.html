@@ -1089,6 +1089,88 @@
             }
         }
 
+        // 统一多标的数据探测算法 (解决14:50时间差滞后漏洞)
+        async function queryStockDetailMetrics(marketCode, codeRaw) {
+            const [rtResultStr, klineResult] = await Promise.all([
+                fetchRealTimeQuote(marketCode),
+                fetchStockData(marketCode)
+            ]);
+
+            const parts = rtResultStr.split('~');
+            if (parts.length < 35) {
+                throw new Error('行情解析失败');
+            }
+
+            const name = parts[1];
+            const tailPrice = parseFloat(parts[3]);
+            const closePrice = parseFloat(parts[4]);
+            const lowPrice = parseFloat(parts[34]);
+            const todayVolume = parseFloat(parts[6]); // 手
+
+            // 关键修复：从实时行情部分(parts[30])抓取中国市场当前的绝对日期，如"20260710150000" -> "2026-07-10"
+            const rawDateTimeStr = parts[30];
+            const marketTodayDate = rawDateTimeStr.slice(0, 4) + '-' + rawDateTimeStr.slice(4, 6) + '-' + rawDateTimeStr.slice(6, 8);
+
+            // K线解构
+            const dataBlock = klineResult.data?.[marketCode];
+            if (!dataBlock) {
+                throw new Error('K线数据获取失败');
+            }
+            const dayData = dataBlock.day || dataBlock.qfqday;
+            if (!dayData || dayData.length < 10) {
+                throw new Error('K线周期少于10天');
+            }
+
+            // 动态均线计算
+            const lastKlineDate = dayData[dayData.length - 1][0]; // 最后一天的日期，例如 "2026-07-10"
+            const closes = dayData.map(d => parseFloat(d[2]));
+
+            // 核心对齐：对比 K 线最后一天与今日最新报价的时间戳是否相同
+            if (marketTodayDate === lastKlineDate) {
+                // 如果相同，说明K线已经注册了今日烛台，直接动态校准最新的价格
+                closes[closes.length - 1] = tailPrice;
+                dayData[dayData.length - 1][2] = tailPrice; // 历史大池也同步覆盖更新
+                dayData[dayData.length - 1][4] = lowPrice;
+                dayData[dayData.length - 1][5] = todayVolume;
+            } else {
+                // 如果不同（说明正处于 14:50 临场，K线还没更新今日数据），我们把最新价追加(Push)进去，并剔除最老的数据
+                closes.push(tailPrice);
+                closes.shift();
+                dayData.push([marketTodayDate, parts[5], tailPrice, parts[33], lowPrice, todayVolume]);
+            }
+
+            // 重新科学测算均线
+            const ma5 = closes.slice(-5).reduce((s, v) => s + v, 0) / 5;
+            // 🛠️ [极速修复致命漏洞]: 之前的 ma10 没有使用 .slice(-10)，导致将全部 200 天的数据进行了求和并除以 10！
+            // 现正式修复滑动窗口边界限制，精准截取最后的 10 天进行 10 日均线测算，彻底与交易软件 100% 对齐！
+            const ma10 = closes.slice(-10).reduce((s, v) => s + v, 0) / 10;
+
+            // 获取过去 5 日的成交量 (day[5]) 并算平均量
+            const prevVolumes = dayData.slice(-6, -1).map(d => parseFloat(d[5]));
+            const avgVolume5Days = prevVolumes.reduce((s, v) => s + v, 0) / 5;
+
+            // 尾盘量能爆发：
+            const isVolumeSpike = todayVolume >= (avgVolume5Days * 1.3);
+
+            // 智能区分品种
+            let calculatedAssetType = 'STOCK';
+            if (/^(50|51|52|56|58|15|16)/.test(codeRaw) || /etf/i.test(name)) {
+                calculatedAssetType = 'ETF';
+            }
+
+            return {
+                name,
+                close: closePrice,
+                low: lowPrice,
+                tail: tailPrice,
+                ma5,
+                ma10,
+                isVolumeSpike,
+                assetType: calculatedAssetType,
+                allKlines: dayData // 🚀 传出完整的 200 日 K 线，给后视镜做池子
+            };
+        }
+
         // 渲染历史日期下拉菜单
         function renderHistoryDatePicker(klines) {
             const selectHist = document.getElementById('select-history-date');
@@ -1189,86 +1271,6 @@
 
             showToast(`已穿越回测 [${candleT[0]}] 历史尾盘盘口`, 'info');
             calculateDecision();
-        }
-
-        // 统一多标的数据探测算法 (解决14:50时间差滞后漏洞)
-        async function queryStockDetailMetrics(marketCode, codeRaw) {
-            const [rtResultStr, klineResult] = await Promise.all([
-                fetchRealTimeQuote(marketCode),
-                fetchStockData(marketCode)
-            ]);
-
-            const parts = rtResultStr.split('~');
-            if (parts.length < 35) {
-                throw new Error('行情解析失败');
-            }
-
-            const name = parts[1];
-            const tailPrice = parseFloat(parts[3]);
-            const closePrice = parseFloat(parts[4]);
-            const lowPrice = parseFloat(parts[34]);
-            const todayVolume = parseFloat(parts[6]); // 手
-
-            // 关键修复：从实时行情部分(parts[30])抓取中国市场当前的绝对日期，如"20260710150000" -> "2026-07-10"
-            const rawDateTimeStr = parts[30];
-            const marketTodayDate = rawDateTimeStr.slice(0, 4) + '-' + rawDateTimeStr.slice(4, 6) + '-' + rawDateTimeStr.slice(6, 8);
-
-            // K线解构
-            const dataBlock = klineResult.data?.[marketCode];
-            if (!dataBlock) {
-                throw new Error('K线数据获取失败');
-            }
-            const dayData = dataBlock.day || dataBlock.qfqday;
-            if (!dayData || dayData.length < 10) {
-                throw new Error('K线周期少于10天');
-            }
-
-            // 动态均线计算
-            const lastKlineDate = dayData[dayData.length - 1][0]; // 最后一天的日期，例如 "2026-07-10"
-            const closes = dayData.map(d => parseFloat(d[2]));
-
-            // 核心对齐：对比 K 线最后一天与今日最新报价的时间戳是否相同
-            if (marketTodayDate === lastKlineDate) {
-                // 如果相同，说明K线已经注册了今日烛台，直接动态校准最新的价格
-                closes[closes.length - 1] = tailPrice;
-                dayData[dayData.length - 1][2] = tailPrice; // 历史大池也同步覆盖更新
-                dayData[dayData.length - 1][4] = lowPrice;
-                dayData[dayData.length - 1][5] = todayVolume;
-            } else {
-                // 如果不同（说明正处于 14:50 临场，K线还没更新今日数据），我们把最新价追加(Push)进去，并剔除最老的数据
-                closes.push(tailPrice);
-                closes.shift();
-                dayData.push([marketTodayDate, parts[5], tailPrice, parts[33], lowPrice, todayVolume]);
-            }
-
-            // 重新科学测算均线
-            const ma5 = closes.slice(-5).reduce((s, v) => s + v, 0) / 5;
-            const ma10 = closes.reduce((s, v) => s + v, 0) / 10;
-
-            // 获取过去 5 日的成交量 (day[5]) 并算平均量
-            const prevVolumes = dayData.slice(-6, -1).map(d => parseFloat(d[5]));
-            const avgVolume5Days = prevVolumes.reduce((s, v) => s + v, 0) / 5;
-
-            // 尾盘量能爆发：
-            const isVolumeSpike = todayVolume >= (avgVolume5Days * 1.3);
-
-            // 智能区分品种
-            let calculatedAssetType = 'STOCK';
-            if (/^(50|51|52|56|58|15|16)/.test(codeRaw) || /etf/i.test(name)) {
-                calculatedAssetType = 'ETF';
-            }
-
-            return {
-                name,
-                close: closePrice,
-                low: lowPrice,
-                tail: tailPrice,
-                ma5,
-                ma10,
-                isVolumeSpike,
-                assetType: calculatedAssetType,
-                allKlines: dayData // 🚀 传出完整的 200 日 K 线，给后视镜做池子
-            };
         }
 
         // ==================== ⭐️ 持久化持仓自选控制引擎 (双向指示灯) ====================
